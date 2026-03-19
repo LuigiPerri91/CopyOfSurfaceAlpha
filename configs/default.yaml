@@ -1,0 +1,40 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  SurfaceAlpha — Master Configuration                        ║
+# ║  Composes all sub-configs. Override any value from CLI:     ║
+# ║    python scripts/train.py training.learning_rate=0.0005    ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+defaults:
+  - data
+  - model
+  - training
+  - backtest
+  - symbols
+  - _self_            # this file's values override sub-configs on conflict
+
+# ── Project-level settings ──
+project_name: SurfaceAlpha
+seed: 42
+device: auto          # "auto" → CUDA if available, else CPU
+
+# ── Paths (relative to project root, overridden by DATA_DIR env var) ──
+paths:
+  data_dir: ${oc.env:DATA_DIR,./data}
+  raw_dir: ${paths.data_dir}/raw
+  canonical_dir: ${paths.data_dir}/canonical
+  processed_dir: ${paths.data_dir}/processed
+  output_dir: ./outputs
+  checkpoint_dir: ./checkpoints
+
+# ── Logging ──
+logging:
+  level: INFO         # DEBUG, INFO, WARNING, ERROR
+  wandb:
+    enabled: false
+    project: ${oc.env:WANDB_PROJECT,SurfaceAlpha}
+    entity: ${oc.env:WANDB_ENTITY,}
+    mode: ${oc.env:WANDB_MODE,offline}
+
+# ── Active symbol set (pointer into symbols.yaml) ──
+# Change this single line to scale from pilot → full universe
+active_symbols: pilot

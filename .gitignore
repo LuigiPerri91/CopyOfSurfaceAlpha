@@ -205,3 +205,34 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ═══════════════════════════════════════════════════════════════
+# SurfaceAlpha — Project-Specific
+# ═══════════════════════════════════════════════════════════════
+
+# ── Data (too large for git) ──
+data/raw/
+data/canonical/
+data/processed/
+!data/raw/.gitkeep
+!data/canonical/.gitkeep
+!data/processed/.gitkeep
+
+# ── Model artifacts ──
+outputs/
+checkpoints/
+*.pt
+*.ckpt
+*.pth
+
+# ── Experiment tracking ──
+wandb/
+
+# ── Dolt local clone ──
+dolt_clone/
+
+# ── Hydra run outputs ──
+multirun/
+
+# ── macOS ──
+.DS_Store

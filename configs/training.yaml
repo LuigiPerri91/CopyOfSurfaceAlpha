@@ -1,0 +1,81 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  SurfaceAlpha — Training Configuration                      ║
+# ║  Walk-forward loop, loss weights, ensemble, baselines       ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# ── Optimizer ──
+optimizer:
+  name: adamw
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+
+# ── Learning rate scheduler ──
+scheduler:
+  name: cosine                    # "cosine" or "plateau"
+  # Cosine annealing
+  cosine_t_max: 50
+  cosine_eta_min: 0.000001
+  # Reduce on plateau
+  plateau_factor: 0.5
+  plateau_patience: 5
+  # Warmup (applied before main scheduler)
+  warmup_epochs: 3
+
+# ── Training loop ──
+batch_size: 64
+num_epochs: 100
+gradient_clip_norm: 1.0
+
+# ── Early stopping ──
+early_stopping:
+  enabled: true
+  patience: 10                    # epochs without val improvement
+  monitor: val_loss
+  min_delta: 0.0001               # minimum change to count as improvement
+
+# ── Loss weights ──
+# L = lv*L_vol + lt*L_tail + lr*L_reg + ls*L_smooth
+loss_weights:
+  lambda_vol: 1.0                 # Huber on log(RV) — primary objective
+  lambda_tail: 0.3                # BCE for tail-risk
+  lambda_reg: 0.2                 # CE for regime classification
+  lambda_smooth: 0.05             # surface regularization
+
+# ── Huber loss ──
+huber_delta: 1.0
+
+# ── Walk-forward cross-validation ──
+walk_forward:
+  num_folds: 5
+  train_window_days: 504          # ~2 years
+  val_window_days: 63             # ~3 months
+  test_window_days: 63            # ~3 months
+  mode: expanding                 # "rolling" or "expanding"
+  embargo_days: 5                 # gap between train end and val start
+  step_days: 63                   # advance between fold starts
+
+# ── Deep ensemble ──
+ensemble:
+  enabled: false                  # enable in Phase 7
+  num_members: 5
+  seeds: [42, 123, 456, 789, 1024]
+
+# ── Baselines (trained on same folds for fair comparison) ──
+baselines:
+  persistence: true
+  garch: true
+  har_rv: true
+  boosting: true
+  deep_ts: true
+  # Residual learning: train deep model on y_res = y - y_base
+  residual_learning:
+    enabled: true
+    base_model: har_rv
+
+# ── Data loading ──
+dataloader:
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2

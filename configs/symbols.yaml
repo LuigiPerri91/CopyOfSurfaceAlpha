@@ -1,0 +1,52 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  SurfaceAlpha — Symbol Universe Configuration               ║
+# ║  Scale by changing active_symbols in default.yaml           ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# ── Phase 1: Single symbol for pipeline development ──
+pilot:
+  - SPY
+
+# ── Phase 2: Liquid core for generalization testing ──
+liquid_core:
+  - SPY
+  - QQQ
+  - IWM
+  - DIA
+  - AAPL
+  - MSFT
+  - AMZN
+  - GOOGL
+  - TSLA
+  - NVDA
+  - META
+  - XLF
+  - XLE
+  - XLK
+
+# ── Phase 3: Auto-filtered medium universe ──
+# These thresholds are applied to DoltHub data to auto-select ~100-200 symbols
+medium_universe:
+  auto_select: true
+  min_avg_daily_option_volume: 1000
+  min_avg_strikes_per_date: 20
+  min_price_history_days: 1000
+
+# ── Phase 4: Full universe (all ~2000 DoltHub symbols) ──
+full_universe:
+  auto_select: true
+  min_avg_daily_option_volume: 50
+  min_avg_strikes_per_date: 5
+  exclude_known_bad: true
+
+# ── Symbol mapping overrides ──
+# DoltHub act_symbol → yfinance ticker for known mismatches
+symbol_overrides:
+  "BRK B":   "BRK-B"
+  "BRK/B":   "BRK-B"
+  "BF B":    "BF-B"
+  "BF/B":    "BF-B"
+
+# ── Explicit exclusions ──
+# Symbols to skip even if they pass auto-select filters
+exclude: []

@@ -1,0 +1,131 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  SurfaceAlpha — Data Pipeline Configuration                 ║
+# ║  Controls fetching, cleaning, surface construction,         ║
+# ║  feature engineering, and target computation                ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# ── Date range ──
+date_range:
+  start: "2019-01-01"
+  end: "2024-12-31"
+
+# ── DoltHub source ──
+dolthub:
+  repo: ${oc.env:DOLTHUB_REPO,post-no-preference/options}
+  tables:
+    - option_chain
+    - volatility_history
+  # "api" = remote SQL queries; "clone" = local Dolt clone
+  access_method: clone
+
+# ── Liquidity & quality filters (applied to option_chain) ──
+filters:
+  min_bid: 0.05                   # drop options with bid below this (stale/worthless)
+  max_spread_pct: 0.50            # drop if (ask-bid)/midpoint > 50%
+  min_iv: 0.01                    # drop if vol (IV) < 1% (likely data error)
+  max_iv: 5.00                    # drop if vol > 500% (likely data error)
+  min_delta_abs: 0.02             # drop deep OTM with near-zero delta
+  max_delta_abs: 0.98             # drop deep ITM with near-one delta
+
+# ── Moneyness bounds ──
+moneyness:
+  min: 0.80                       # K/S lower bound (20% OTM puts)
+  max: 1.20                       # K/S upper bound (20% OTM calls)
+
+# ── Maturity bounds ──
+maturity:
+  min_days: 7                     # minimum DTE (skip weeklies expiring in < 1 week)
+  max_days: 365                   # maximum DTE (skip LEAPS > 1 year)
+
+# ── Surface grid dimensions ──
+surface:
+  n_moneyness_bins: 20            # width of the fixed grid (log-moneyness axis)
+  n_maturity_bins: 12             # height of the fixed grid (maturity axis)
+  # Maturity bucket boundaries in calendar days (denser at short end)
+  maturity_buckets: [7, 14, 21, 30, 45, 60, 90, 120, 150, 180, 270, 365]
+  # Surface construction mode for puts vs calls
+  # "otm_only" = OTM puts for K/S<1, OTM calls for K/S>1 (standard vol smile)
+  # "separate" = independent put and call surfaces (doubles channel count)
+  put_call_mode: otm_only
+  # Interpolation for missing grid cells (within-date only, never cross-date)
+  interpolation: linear           # "linear", "nearest", "none"
+
+# ── Surface channels ──
+channels:
+  # Base channels (always included)
+  iv: true                        # implied vol from DoltHub 'vol' column
+  spread_norm: true               # normalized bid-ask spread
+  obs_mask: true                  # 1 = real observation, 0 = missing/interpolated
+  staleness: true                 # days since last real observation (gap-filled dates)
+  # Enhanced channels
+  delta: true                     # delta surface
+  vega: true                      # vega surface
+  # Total channels = count of true values above (default: 6)
+
+# ── Returns stream (temporal encoder input) ──
+returns:
+  lookback_window: 60             # L = number of trailing trading days
+  features:
+    log_returns: true
+    realized_vol_windows: [5, 10, 21]     # trailing RV at multiple scales
+    jump_indicator: true
+    jump_threshold_sigma: 2.5     # |r_t| > 2.5x rolling sigma
+    rolling_beta: true            # beta to SPY over trailing window
+    rolling_beta_window: 60
+
+# ── Volatility history features (from DoltHub volatility_history table) ──
+vol_history:
+  enabled: true
+  features:
+    iv_rank: true                 # (iv_current - iv_year_low) / (iv_year_high - iv_year_low)
+    hv_rank: true                 # same formula for historical vol
+    vol_risk_premium: true        # iv_current - hv_current
+    iv_momentum_short: true       # iv_current - iv_week_ago
+    iv_momentum_medium: true      # iv_current - iv_month_ago
+    hv_momentum_short: true       # hv_current - hv_week_ago
+    hv_momentum_medium: true      # hv_current - hv_month_ago
+    days_since_iv_year_high: true
+    days_since_iv_year_low: true
+    days_since_hv_year_high: true
+    days_since_hv_year_low: true
+
+# ── Market state features ──
+market_state:
+  vix: true                       # ^VIX daily close
+  spy_return: true                # SPY daily log return
+  risk_free_rate: true           # 3-month T-bill (optional, from FRED)
+
+# ── Forward targets ──
+targets:
+  # Primary: forward realized volatility
+  forward_horizon: 21             # h = trading days ahead (5=1wk, 21=1mo)
+  # Secondary: tail-risk indicator
+  tail_indicator: true
+  tail_threshold_method: percentile   # "percentile" or "sigma"
+  tail_threshold_value: 90            # 90th pctl of RV, or Nx sigma
+  # Regime labels (from rule-based ID for training the regime head)
+  regime_labels: true
+
+# ── Gap handling ──
+# DoltHub coverage is irregular: recent=daily, older=MWF or weekly
+gaps:
+  # "skip" = drop that date (safest)
+  # "forward_fill" = carry forward last surface + increment staleness
+  # "mark_stale" = forward_fill + flag in metadata
+  policy: mark_stale
+  max_gap_days: 5                 # gaps > this many calendar days are dropped
+
+# ── Observation frequency weighting ──
+# Down-weight older, less frequently sampled data during training
+obs_weighting:
+  enabled: true
+  daily: 1.0
+  mwf: 0.8
+  weekly: 0.5
+
+# ── Normalization ──
+normalization:
+  # Z-score using only backward-looking (expanding window) statistics
+  method: expanding_zscore
+  # Minimum observations before normalization kicks in
+  min_obs: 30

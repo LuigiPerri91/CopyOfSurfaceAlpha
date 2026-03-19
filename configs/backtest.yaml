@@ -1,0 +1,111 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  SurfaceAlpha — Backtest & Portfolio Overlay Configuration  ║
+# ║  Trading overlay rules, regime sizing, transaction costs    ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# ── Volatility targeting ──
+# w_t = min(w_max, sigma_target / y_hat_sigma_t)
+vol_targeting:
+  sigma_target: 0.10              # annualized target vol (10%)
+  w_max: 1.5                     # max weight (150% exposure)
+  w_min: 0.0                     # min weight (0% = fully cash)
+
+# ── Regime gating ──
+# w_t = w_t * (1 - p_crisis)
+regime_gating:
+  enabled: true
+  crisis_regimes:
+    - bear_volatile
+    - sideways_volatile
+
+# ── Six-regime position sizing (from PDR) ──
+regime_rules:
+  bull_quiet:
+    position_size: 1.0            # 100%
+    atr_stop_multiplier: 2.0      # 1.5-2x ATR
+    strategy_note: "trend-following, let profits run"
+
+  bull_volatile:
+    position_size: 0.625          # midpoint of 50-75%
+    atr_stop_multiplier: 2.5      # 2-3x ATR
+    strategy_note: "momentum can work, survive swings"
+
+  bear_quiet:
+    position_size: 1.0            # 100%
+    atr_stop_multiplier: 2.0      # 1.5-2x ATR
+    strategy_note: "short trend following, rare but tradeable"
+
+  bear_volatile:
+    position_size: 0.375          # midpoint of 25-50%
+    atr_stop_multiplier: 3.0      # 3x+ ATR
+    strategy_note: "capital preservation, cash is a position"
+
+  sideways_quiet:
+    position_size: 0.625          # 50-75%
+    atr_stop_multiplier: 1.5      # tight at S/R
+    strategy_note: "mean-reversion, fade extremes"
+
+  sideways_volatile:
+    position_size: 0.0            # DO NOT TRADE
+    atr_stop_multiplier: 0.0
+    strategy_note: "step aside entirely, no edge"
+
+# ── ADX override (from PDR) ──
+# ADX < threshold + expanding volatility → reduce by 50%
+adx_override:
+  enabled: true
+  adx_threshold: 20
+  size_reduction: 0.5
+
+# ── Ensemble confidence scaling (Phase 7) ──
+# w_t = w_t * 1/(1 + ensemble_std)
+confidence_scaling:
+  enabled: false
+
+# ── Transaction costs ──
+costs:
+  transaction_cost_bps: 5         # 5 bps per side
+  slippage_bps: 2                 # 2 bps per trade
+  # Round-trip total = 2 * (5 + 2) = 14 bps
+
+# ── Rebalancing ──
+rebalance:
+  frequency: daily                # "daily" or "weekly"
+  min_trade_threshold: 0.02       # skip if |delta_w| < 2%
+
+# ── Regime identification indicators ──
+# Used by regime_rules.py for rule-based classification
+regime_identification:
+  # Trend direction
+  ma_period: 200
+  # Trend strength (ADX)
+  adx_period: 14
+  adx_thresholds:
+    no_trend: 20
+    tradeable: 25
+    extreme: 50
+  # Volatility state: ATR_short / ATR_long
+  atr_short_period: 10
+  atr_long_period: 50
+  atr_ratio_thresholds:
+    quiet: 0.75
+    normal_low: 0.75
+    normal_high: 1.25
+    volatile: 1.25
+  # VIX thresholds (broad equity)
+  vix_thresholds:
+    low: 15
+    normal: 20
+    elevated: 25
+    extreme: 30
+
+# ── Benchmark strategies for comparison ──
+benchmarks:
+  buy_and_hold: true              # w = 1.0 always
+  inverse_vol: true               # 1/trailing_RV targeting (no model)
+  constant_vol_target: true       # vol-target using trailing RV only
+
+# ── Evaluation ──
+evaluation:
+  trading_days_per_year: 252
+  risk_free_rate: 0.0             # or use actual rate from market_state
