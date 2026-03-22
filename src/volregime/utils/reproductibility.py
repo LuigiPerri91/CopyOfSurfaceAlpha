@@ -6,7 +6,7 @@ def set_seed(seed=42):
     """set all random seeds for reproductibility"""
     random.seed(seed)
     torch.manual_seed(seed)
-    numpy.random.seed(seed)
+    np.random.seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = False

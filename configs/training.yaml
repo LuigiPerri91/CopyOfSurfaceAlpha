@@ -15,7 +15,7 @@ optimizer:
 scheduler:
   name: cosine                    # "cosine" or "plateau"
   # Cosine annealing
-  cosine_t_max: 50
+  cosine_t_max: 1000               # match num_epochs
   cosine_eta_min: 0.000001
   # Reduce on plateau
   plateau_factor: 0.5
@@ -25,7 +25,7 @@ scheduler:
 
 # ── Training loop ──
 batch_size: 64
-num_epochs: 100
+num_epochs: 1000
 gradient_clip_norm: 1.0
 
 # ── Early stopping ──
@@ -48,13 +48,13 @@ huber_delta: 1.0
 
 # ── Walk-forward cross-validation ──
 walk_forward:
-  num_folds: 5
-  train_window_days: 504          # ~2 years
-  val_window_days: 63             # ~3 months
-  test_window_days: 63            # ~3 months
-  mode: expanding                 # "rolling" or "expanding"
-  embargo_days: 5                 # gap between train end and val start
-  step_days: 63                   # advance between fold starts
+  num_folds: 8                      # ~2 yr worth of quarterly test folds across 7 yr range
+  train_window_days: 756            # ~3 years (expanding from this base)
+  val_window_days: 63               # ~3 months
+  test_window_days: 63              # ~3 months
+  mode: expanding                   # "rolling" or "expanding"
+  embargo_days: 5                   # gap between train end and val start
+  step_days: 63                     # advance between fold starts (~quarterly)
 
 # ── Deep ensemble ──
 ensemble:
