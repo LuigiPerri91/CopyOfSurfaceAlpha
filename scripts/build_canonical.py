@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np 
 from pathlib import Path
 import yaml
-import sys
+import sys, os
 import logging
 import json
 import datetime
@@ -10,8 +10,8 @@ import datetime
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')) 
 sys.path.append(project_root) 
 
-from volregime.data.cleaning import (standardize_call_put, rename_iv_column, 
-filter_quality, filter_moneyness, filter_maturity, detect_obs_frequency, detect_gaps)
+from volregime.data.cleaning import (standardize_call_put, rename_iv_column,
+                                     filter_quality, filter_moneyness, filter_maturity, detect_obs_frequency)
 from volregime.data.vol_history import compute_vol_history_features
 from volregime.data.underlying import compute_log_returns
 from volregime.utils.io import save_parquet, save_json
@@ -34,7 +34,7 @@ print(f'Raw: option_chain={len(option_chain)}, vol_history={len(vol_history_raw)
 # step 1: clean option chain
 option_chain = standardize_call_put(option_chain)
 option_chain = rename_iv_column(option_chain)
-option_chain = filter_quality(option_chain, configs['data']['filters'])
+option_chain = filter_quality(option_chain, config['data']['filters'])
 
 # step 2: add log returns to underlying
 underlying_frames = []
@@ -90,7 +90,7 @@ save_parquet(underlying_all, canonical_dir / "underlying_canonical.parquet")
 save_parquet(market_state, canonical_dir / "market_state_canonical.parquet")
 save_parquet(vol_history_features, canonical_dir / "vol_history_canonical.parquet")
 
-save.json({
+save_json({
     "rows": {"options": len(option_chain), "underlying":len(underlying_all), "market_state": len(market_state), "vol_history": len(vol_history_features)},
     "symbols": list(option_chain['act_symbol'].unique()),
     "date_range": [str(option_chain['date'].min()), str(option_chain['date'].max())],

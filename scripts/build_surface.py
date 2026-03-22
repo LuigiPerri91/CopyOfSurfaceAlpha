@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np 
 import torch
 from pathlib import Path
-import yaml, sys, logging, json, datetime
+import yaml, sys, logging, json, datetime, os
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')) 
 sys.path.append(project_root) 
@@ -16,12 +16,12 @@ from volregime.utils.config import load_config
 config = load_config()
 
 canonical_dir = Path(config['default']['paths']['canonical_dir'])
-processed_dir = Path(config['default']['pahts']['processed_dir'])
+processed_dir = Path(config['default']['paths']['processed_dir'])
 
 # load canonical data
 options = pd.read_parquet(canonical_dir / "options_canonical.parquet")
 underlying = pd.read_parquet(canonical_dir / "underlying_canonical.parquet")
-market_state = pd.read_parquet(canonical_dir / "mkt_canonical.parquet")
+market_state = pd.read_parquet(canonical_dir / "market_state_canonical.parquet")
 vol_history = pd.read_parquet(canonical_dir / "vol_history_canonical.parquet")
 
 L = config['data']['returns']['lookback_horizon'] # 60
@@ -131,6 +131,13 @@ for symbol in unique_pairs['act_symbol'].unique():
 # save master index
 index_df = pd.DataFrame(sample_index)
 index_df.to_parquet(processed_dir / "sample_index.parquet", index=False)
+
+save_json({
+    "num_samples": len(sample_index),
+    "symbols": list(unique_pairs['act_symbol'].unique()),
+    "skipped": skipped,
+    "timestamp": datetime.datetime.utcnow().isoformat()
+}, processed_dir / "build_surface_meta.json")
 
 print(f"Built {len(sample_index)} samples")
 print(f"Skipped: {skipped}")

@@ -141,7 +141,7 @@ def compute_adx(highs, lows, closes, period=14):
         return 0.0
     
     # true range
-    tr = np.max(highs[1:] - lows[1:], np.max(np.abs(highs[1:] - closes[:-1]), np.abs(lows[1:] - closes[:-1])))
+    tr = np.maximum(highs[1:] - lows[1:], np.maximum(np.abs(highs[1:] - closes[:-1]), np.abs(lows[1:] - closes[:-1])))
 
     # directional movement
     up_move = highs[1:] - highs[:-1]
@@ -169,7 +169,7 @@ def compute_atr(highs, lows, closes, period=14):
     if n < 2:
         return 0.0
     
-    tr = np.max(highs[1:] - lows[1:], np.max(np.abs(highs[1:] - closes[:-1]), np.abs(lows[1:] - closes[:-1])))
+    tr = np.maximum(highs[1:] - lows[1:], np.maximum(np.abs(highs[1:] - closes[:-1]), np.abs(lows[1:] - closes[:-1])))
 
     if len(tr) < period:
         return float(np.mean(tr))

@@ -93,7 +93,7 @@ def build_surface(option_rows, surface_config, is_gap_filled=False, gap_days=0):
     grid[5] /= counts_safe
 
     # mask 
-    # mask =1 where at least one observation, 0 otherwise
+    # mask = 1 where at least one observation, 0 otherwise
     mask = (counts>0).astype(np.float32)
     grid[2] = mask
 
@@ -107,14 +107,13 @@ def build_surface(option_rows, surface_config, is_gap_filled=False, gap_days=0):
     if interp_method != 'none' and mask.sum() >= 4:
         # only interpolate channels 0,1,4,5 (not mask or staleness)
         observed_coords = np.argwhere(mask>0) # (N,2) array of [t_idx, m_idx]
-        if len(observed_coords) >= 4:
-            target_coords = np.argwhere(mask==0) # (N,2) array of [t_idx, m_idx]
-            if len(target_coords) >0:
-                for c in [0,1,4,5]:
-                    observed_values = grid[c][mask>0]
-                    interpolated = griddata(observed_coords, observed_values, target_coords, method=interp_method, fill_value=0.0)
-                    for k, (ti, mi) in enumurate(target_coords):
-                        # only fill if interpolation succeeded (not NaN)
-                        if not np.isnan(interpolated[k]):
-                            grid[c, ti, mi] = interpolated[k]
+        target_coords = np.argwhere(mask==0) # (N,2) array of [t_idx, m_idx]
+        if len(target_coords) > 0:
+            for c in [0,1,4,5]:
+                observed_values = grid[c][mask>0]
+                interpolated = griddata(observed_coords, observed_values, target_coords, method=interp_method, fill_value=0.0)
+                for k, (ti, mi) in enumerate(target_coords):
+                    # only fill if interpolation succeeded (not NaN)
+                    if not np.isnan(interpolated[k]):
+                        grid[c, ti, mi] = interpolated[k]
     return grid # shape : (num_channels, n_t, n_m)

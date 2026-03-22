@@ -22,7 +22,7 @@ def build_returns_tensor(underlying_df, returns_config):
             sorted ascending by date. Must have columns:
             [date, adj_close, log_return, ...]
             Must already have log_return computed.
-        returns_config: the data.yaml returns section
+    returns_config: the data.yaml returns section
 
     Returns:
         numpy array of shape (L, F_ret) where F_ret = number of enabled features
@@ -68,7 +68,7 @@ def build_returns_tensor(underlying_df, returns_config):
         if 'spy_return' in window.columns:
             betas = []
             for i in range(len(window)):
-                if i < beta_window - 1:
+                if i < beta_window - 1: # for first 60 days put 0 as not enough data
                     betas.append(0.0)
                 else:
                     y = window['log_return'].iloc[i - beta_window + 1:i + 1].values

@@ -40,8 +40,8 @@ class _TCNBlock(nn.Module):
     def __init__(self, in_ch: int, out_ch:int, kernel_size:int, dilation:int , dropout:float = 0.2):
         super().__init__()
         self.padding = (kernel_size - 1) *dilation
-        self.conv1 = nn.utils.weight_norm(nn.Conv1d(in_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
-        self.conv2 = nn.utils.weight_norm(nn.Conv1d(out_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
+        self.conv1 = nn.utils.parametrize(nn.Conv1d(in_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
+        self.conv2 = nn.utils.parametrize(nn.Conv1d(out_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
         self.act = nn.GELU()
         self.dropout = nn.Dropout(dropout)
         self.downsample = nn.Conv1d(in_ch, out_ch, 1) if in_ch != out_ch else None

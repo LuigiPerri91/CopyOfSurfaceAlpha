@@ -17,8 +17,8 @@ def compute_vol_history_features(df, config_features=None):
     Output: same DataFrame with additional columns for each enabled feature
 
     Args: 
-    - df: raw volatility_history DataFrame with dtypes already castx
-    - config_features: teh vol_history.features section from data.yaml
+    - df: raw volatility_history DataFrame with dtypes already cast
+    - config_features: the vol_history.features section from data.yaml
         (if None, compute all features)
     
     Returns:
