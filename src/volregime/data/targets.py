@@ -45,11 +45,17 @@ def compute_tail_indicator(future_log_returns, rv, method,  threshold_value, his
         threshold = np.percentile(historical_rvs, threshold_value)
         return int(rv > threshold)
     elif method == 'sigma':
-        # tail if max absolute daily return > N* rolling std
+        # tail if max absolute daily return > N * historical return std
+        # Note: historical_rvs here is past RV values (not returns), so we
+        # use the forward returns themselves as the baseline for comparison.
+        # A better sigma baseline would be trailing return std, but since we
+        # only have historical_rvs available here, use rv as the scale proxy.
         max_abs_ret = np.max(np.abs(future_log_returns))
         if historical_rvs is not None and len(historical_rvs) > 0:
-            rolling_std  = np.std(historical_rvs)
-            return int(max_abs_ret > threshold_value * rolling_std)
+            # Approximate: typical daily move ≈ trailing RV / sqrt(h)
+            h = len(future_log_returns)
+            typical_daily_rv = float(np.median(historical_rvs)) / np.sqrt(max(h, 1))
+            return int(max_abs_ret > threshold_value * typical_daily_rv)
         return 0
     else:
         raise ValueError(f"Unknown tail method: {method}")
@@ -104,24 +110,32 @@ def compute_regime_label(underlying_window, market_state_row, regime_config):
     if adx < adx_thresholds.get("no_trend",20):
         direction = 'sideways'
 
-    # volatility state: ATR ratio
-    atr_short_period = regime_config.get('atr_short_period', 10)
-    atr_long_period = regime_config.get('atr_long_period',50)
-    atr_ratio_thresholds = regime_config.get('atr_ratio_thresholds', {"quiet": 0.75, "volatile": 1.25})
-    atr_short = compute_atr(highs, lows, closes, atr_short_period)
-    atr_long = compute_atr(highs, lows, closes, atr_long_period)    
+    # volatility state: VIX hard override → ATR ratio tiebreaker
+    vix_thresholds = regime_config.get('vix_thresholds', {'low': 15, 'elevated': 25})
+    vix = float(market_state_row.get('vix', float('nan')) if hasattr(market_state_row, 'get') else market_state_row['vix'])
 
-    if atr_long > 0:
-        atr_ratio = atr_short / atr_long 
-    else:
-        atr_ratio = 1.0
-
-    if atr_ratio < atr_ratio_thresholds.get("quiet", 0.75):
-        volatility = 'quiet'
-    elif atr_ratio > atr_ratio_thresholds.get('volatile',1.25):
+    if not np.isnan(vix) and vix >= vix_thresholds.get('elevated', 25):
+        # VIX at or above elevated threshold → hard override to volatile
         volatility = 'volatile'
+    elif not np.isnan(vix) and vix <= vix_thresholds.get('low', 15):
+        # VIX at or below low threshold → hard override to quiet
+        volatility = 'quiet'
     else:
-        volatility = 'quiet' # normal -> default to quiet
+        # VIX in normal range → fall through to ATR ratio
+        atr_short_period = regime_config.get('atr_short_period', 10)
+        atr_long_period = regime_config.get('atr_long_period', 50)
+        atr_ratio_thresholds = regime_config.get('atr_ratio_thresholds', {'quiet': 0.75, 'volatile': 1.25})
+        atr_short = compute_atr(highs, lows, closes, atr_short_period)
+        atr_long = compute_atr(highs, lows, closes, atr_long_period)
+
+        atr_ratio = atr_short / atr_long if atr_long > 0 else 1.0
+
+        if atr_ratio < atr_ratio_thresholds.get('quiet', 0.75):
+            volatility = 'quiet'
+        elif atr_ratio > atr_ratio_thresholds.get('volatile', 1.25):
+            volatility = 'volatile'
+        else:
+            volatility = 'quiet'  # normal range → default to quiet
     
     regime_map = {
         ("bull", "quiet"): 0,
@@ -137,31 +151,43 @@ def compute_regime_label(underlying_window, market_state_row, regime_config):
 def compute_adx(highs, lows, closes, period=14):
     """Compute Average Directional Index. Returns the latest ADX value."""
     n = len(highs)
-    if n < period + 1:
+    # need at least 2*period bars: one for DI smoothing, one for ADX smoothing
+    if n < 2 * period + 1:
         return 0.0
-    
+
     # true range
     tr = np.maximum(highs[1:] - lows[1:], np.maximum(np.abs(highs[1:] - closes[:-1]), np.abs(lows[1:] - closes[:-1])))
 
     # directional movement
     up_move = highs[1:] - highs[:-1]
     down_move = lows[:-1] - lows[1:]
-    plus_dm = np.where((up_move > down_move) & (up_move>0), up_move, 0.0)
-    minus_dm = np.where((up_move < down_move) & (down_move>0), down_move, 0.0)
+    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+    minus_dm = np.where((up_move < down_move) & (down_move > 0), down_move, 0.0)
 
-    # smoothed averages (Wilder's smoothing)
-    atr = wilder_smooth(tr, period)
-    plus_di = 100 * wilder_smooth(plus_dm, period) / np.where(atr >0, atr, 1)
-    minus_di = 100 * wilder_smooth(minus_dm, period) / np.where(atr >0, atr, 1)
+    # first Wilder pass: smooth TR, +DM, -DM
+    atr_s = wilder_smooth(tr, period)
+    plus_dm_s = wilder_smooth(plus_dm, period)
+    minus_dm_s = wilder_smooth(minus_dm, period)
 
-    # dx
+    # +DI / -DI (valid from index period-1 onward; NaN before)
+    plus_di = 100.0 * plus_dm_s / np.where(atr_s > 0, atr_s, 1.0)
+    minus_di = 100.0 * minus_dm_s / np.where(atr_s > 0, atr_s, 1.0)
+
+    # DX — still has NaN in warm-up positions 0..period-2
     di_sum = plus_di + minus_di
-    dx = 100 * np.abs(plus_di - minus_di) / np.where(di_sum >0 , di_sum, 1)
+    dx = 100.0 * np.abs(plus_di - minus_di) / np.where(di_sum > 0, di_sum, 1.0)
 
-    # adx 
-    adx_values = wilder_smooth(dx, period)
+    # Strip the NaN warm-up prefix before the second Wilder pass (ADX).
+    # Without this, wilder_smooth seeds with np.mean([NaN, ...]) = NaN
+    # and the entire ADX result is NaN, so the regime override never fires.
+    dx_valid = dx[period - 1:]  # first valid DX is at index period-1
+    if len(dx_valid) < period:
+        return 0.0
 
-    return float(adx_values[-1]) if len(adx_values) > 0 else 0.0
+    # second Wilder pass: smooth DX -> ADX
+    adx_values = wilder_smooth(dx_valid, period)
+    valid = adx_values[~np.isnan(adx_values)]
+    return float(valid[-1]) if len(valid) > 0 else 0.0
 
 def compute_atr(highs, lows, closes, period=14):
     """Compute Average True Range. Returns the latest ATR value."""
@@ -175,15 +201,22 @@ def compute_atr(highs, lows, closes, period=14):
         return float(np.mean(tr))
     
     atr_values = wilder_smooth(tr, period)
-    return float(atr_values[-1]) if len(atr_values) >0 else 0.0
+    valid = atr_values[~np.isnan(atr_values)]
+    return float(valid[-1]) if len(valid) > 0 else 0.0
 
 def wilder_smooth(values, period):
     """Wilder's exponential smoothing (used in ATR, ADX)."""
-    result = np.zeros_like(values)
-    result[:period] = np.nan
-    result[period-1] = np.mean(values[:period]) # seed with SMA
-    
+    if len(values) < period:
+        return np.full_like(values, np.nan, dtype=np.float64)
+
+    result = np.zeros(len(values), dtype=np.float64)
+    # seed: first valid value is the SMA of the first `period` bars
+    result[period - 1] = np.mean(values[:period])
+
     for i in range(period, len(values)):
-        result[i] = (result[i-1] * (period-1) + values[i]) / period
+        result[i] = (result[i - 1] * (period - 1) + values[i]) / period
+
+    # mark the warm-up prefix as NaN so callers know these are invalid
+    result[:period - 1] = np.nan
 
     return result

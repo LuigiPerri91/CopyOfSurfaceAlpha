@@ -21,7 +21,7 @@ class LSTMBaseline(nn.Module):
         return self.head(h_n[-1]).squeeze(-1) # (batch,)
     
 class GRUBaseline(nn.Module):
-    """2-layer bidirectional GRU → last hidden → scalar log(RV) forecast."""
+    """2-layer bidirectional GRU -> last hidden -> scalar log(RV) forecast."""
 
     def __init__(self, input_dim: int = 8, hidden_dim: int =64, num_layers: int = 2, drouput: float = 0.2):
         super().__init__()
@@ -39,7 +39,7 @@ class _TCNBlock(nn.Module):
 
     def __init__(self, in_ch: int, out_ch:int, kernel_size:int, dilation:int , dropout:float = 0.2):
         super().__init__()
-        self.padding = (kernel_size - 1) *dilation
+        self.padding = (kernel_size - 1) * dilation
         self.conv1 = nn.utils.parametrize(nn.Conv1d(in_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
         self.conv2 = nn.utils.parametrize(nn.Conv1d(out_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
         self.act = nn.GELU()
@@ -56,7 +56,7 @@ class _TCNBlock(nn.Module):
 
 class TCNBaseline:
     """
-    Dilated causal TCN → global average pool → scalar log(RV) forecast.
+    Dilated causal TCN -> global average pool -> scalar log(RV) forecast.
     """
     def __init__(self, input_dim: int = 8, num_channels: list[int] | None = None, kernel_size: int = 3, dropout: float = 0.2):
         super().__init__()

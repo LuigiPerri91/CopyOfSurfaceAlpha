@@ -8,7 +8,7 @@ class PersistanceBaseline:
     def predict(self,trailing_rv: np.ndarray) -> np.ndarray: 
         return np.asarray(trailing_rv, dtype= np.float32) # identity
 
-class ATMIVCarrryForward:
+class ATMIVCarryForward:
     """
     Use ATM implied vol as the forward RV forecast.
     Extracts from channel 0 (iv), center moneyness column, shortest valid maturity.
