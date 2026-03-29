@@ -78,7 +78,7 @@ class PortfolioOverlay:
 
         # regime sizing
         regime_idx = int(np.argmax(regime_probs))
-        regime_name = REGIME_INT_TO_NAME(regime_idx, "bull_quiet")
+        regime_name = REGIME_INT_TO_NAME.get(regime_idx, "bull_quiet")
         regime_size = self.rules.get_position_size(regime_name)
         w *= regime_size
 

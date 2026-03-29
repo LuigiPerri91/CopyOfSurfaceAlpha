@@ -99,7 +99,7 @@ class _ContextWrapper(nn.Module):
 
         if self.output == 'rv_forecast':
             return out['rv_forecast']
-        if self.output == ' tail_prob':
+        if self.output == 'tail_prob':
             return out['tail_prob']
         if self.output.startswith('regime_'):
             k = int(self.output.split('_')[1])
@@ -149,7 +149,7 @@ class SHAPExplainer:
         ).to(device)
         self.wrapper.eval()
 
-        bg_tensor = torch.Tensor(background, dtype=torch.float32, device=device)
+        bg_tensor = torch.tensor(background, dtype=torch.float32, device=device)
         self.explainer = shap.GradientExplainer(self.wrapper, bg_tensor)
 
     def explain(self, context: np.ndarray, n_samples: int= 200) -> ShapResult:
@@ -163,12 +163,12 @@ class SHAPExplainer:
         Returns:
             ShapResult with .shap_values shape (N, 14)
         """
-        x = torch.Tensor(context, dtype=torch.float32, device=self.device)
+        x = torch.tensor(context, dtype=torch.float32, device=self.device)
         shap_vals = self.explainer.shap_values(x, nsamples=n_samples)
         shap_arr = np.array(shap_vals)
 
         with torch.no_grad():
-            bg = torch.Tensor(self._background, dtype=torch.float32, device=self.device)
+            bg = torch.tensor(self._background, dtype=torch.float32, device=self.device)
             base_val = float(self.wrapper(bg).mean().item())
 
         return ShapResult(
@@ -184,7 +184,7 @@ class SHAPExplainer:
         importance = np.abs(result.shap_values).mean(axis=0)
         return dict(
             sorted(
-                zip(result.feature_names, importance.toilist()),
+                zip(result.feature_names, importance.tolist()),
                 key=lambda x: x[1],
                 reverse=True
             )

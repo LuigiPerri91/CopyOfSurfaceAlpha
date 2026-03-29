@@ -16,7 +16,6 @@ Six regimes (integer -> string):
     4 sideways_quiet    5 sideways_volatile
 """
 
-from wandb.proto.v3.wandb_internal_pb2 import _RECORD
 import numpy as np 
 import logging
 from dataclasses import dataclass

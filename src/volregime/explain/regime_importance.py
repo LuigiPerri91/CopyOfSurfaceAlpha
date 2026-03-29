@@ -121,7 +121,7 @@ def gradient_x_input_regime(
     context = torch.cat([
         vol_history.to(device).float(),
         market_state.to(device).float(),
-    ], dim=-1).detach().requires_grad(True) # (B, 14)
+    ], dim=-1).detach().requires_grad_(True) # (B, 14)
 
     vh = context[:, :VOL_HISTORY_DIM]
     ms = context[:, VOL_HISTORY_DIM:]

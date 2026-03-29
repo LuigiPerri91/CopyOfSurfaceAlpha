@@ -10,9 +10,9 @@ import torch.nn as nn
 class LSTMBaseline(nn.Module):
     """2-layer LSTM -> last hidden -> scalar log(RV) forecast"""
 
-    def __init__(self, input_dim: int = 8, hidden_dim: int =64, num_layers: int = 2, drouput: float = 0.2):
+    def __init__(self, input_dim: int = 8, hidden_dim: int =64, num_layers: int = 2, dropout: float = 0.2):
         super().__init__()
-        self.lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True, drouput=drouput if num_layers > 1 else 0.0)
+        self.lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True, dropout=dropout if num_layers > 1 else 0.0)
         self.head = nn.Linear(hidden_dim,1)
 
     def forward(self, returns: torch.Tensor) -> torch.Tensor:
@@ -23,13 +23,14 @@ class LSTMBaseline(nn.Module):
 class GRUBaseline(nn.Module):
     """2-layer bidirectional GRU -> last hidden -> scalar log(RV) forecast."""
 
-    def __init__(self, input_dim: int = 8, hidden_dim: int =64, num_layers: int = 2, drouput: float = 0.2):
+    def __init__(self, input_dim: int = 8, hidden_dim: int =64, num_layers: int = 2, dropout: float = 0.2):
         super().__init__()
-        self.gru = nn.GRU(input_size=input_dim, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True, drouput=drouput if num_layers > 1 else 0.0)
+        self.gru = nn.GRU(input_size=input_dim, hidden_size=hidden_dim, num_layers=num_layers, batch_first=True, dropout=dropout if num_layers > 1 else 0.0, bidirectional=True)
         self.head = nn.Linear(hidden_dim * 2,1)
 
     def forward(self, returns: torch.Tensor) -> torch.Tensor:
         _, h_n = self.gru(returns)
+        # h_n shape (2*num_layers, batch, hidden)
         fwd = h_n[-2]
         bwd = h_n[-1]
         return self.head(torch.cat([fwd,bwd], dim=-1)).squeeze(-1) # (batch,)
@@ -40,8 +41,8 @@ class _TCNBlock(nn.Module):
     def __init__(self, in_ch: int, out_ch:int, kernel_size:int, dilation:int , dropout:float = 0.2):
         super().__init__()
         self.padding = (kernel_size - 1) * dilation
-        self.conv1 = nn.utils.parametrize(nn.Conv1d(in_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
-        self.conv2 = nn.utils.parametrize(nn.Conv1d(out_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding))
+        self.conv1 = nn.Conv1d(in_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding)
+        self.conv2 = nn.Conv1d(out_ch, out_ch, kernel_size, dilation=dilation, padding=self.padding)
         self.act = nn.GELU()
         self.dropout = nn.Dropout(dropout)
         self.downsample = nn.Conv1d(in_ch, out_ch, 1) if in_ch != out_ch else None
@@ -54,7 +55,7 @@ class _TCNBlock(nn.Module):
         res = x if self.downsample is None else self.downsample(x)
         return self.act(out + res)
 
-class TCNBaseline:
+class TCNBaseline(nn.Module):
     """
     Dilated causal TCN -> global average pool -> scalar log(RV) forecast.
     """

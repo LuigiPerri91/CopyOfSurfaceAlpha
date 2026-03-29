@@ -50,7 +50,6 @@ class SurfaceAlphaModel(nn.Module):
             num_layers=surf_cfg.get("num_layers", 4),
             mlp_ratio=surf_cfg.get("mlp_ratio", 4.0),
             dropout=surf_cfg.get("dropout", 0.1),
-            attn_dropout=surf_cfg.get("attn_dropout", 0.1),
             grid_h=12, grid_w=20,
         )
         surf_dim = surf_cfg.get('embed_dim', 128)

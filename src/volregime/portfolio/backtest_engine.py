@@ -16,10 +16,6 @@ Outputs:
     outputs/backtest/benchmarks.csv
     outputs/backtest/summary.json
 """
-
-from email.policy import default
-from ipaddress import summarize_address_range
-from torch import log_
 import json
 import logging
 from dataclasses import dataclass
@@ -57,7 +53,7 @@ class BacktestEngine:
     def run(
         self,
         predictions_df: pd.DataFrame,
-        ohclv_df : pd.DataFrame,
+        ohlcv_df : pd.DataFrame,
         vix_series: pd.Series | None = None,
         initial_equity: float = 1.0,
     ) -> BacktestResult:
@@ -73,13 +69,10 @@ class BacktestEngine:
                             Must cover predictions period + 250 days of warmup
             vix_series:     VIX close values indexed by date (optional)
             initial_equity: starting portfolio value
-
-        Returns:
-            BacktestResult with equity curve, position history, benchmarks, summary
         """
-        ohclv_df = ohclv_df.copy()
-        ohclv_df.index = pd.to_datetime(ohclv_df.index)
-        pred_dates = sorted(pd.to_datetime(ohclv_df.index))
+        ohlcv_df = ohlcv_df.copy()
+        ohlcv_df.index = pd.to_datetime(ohlcv_df.index)
+        pred_dates = sorted(pd.to_datetime(ohlcv_df.index))
         p_regex = [c for c in predictions_df.columns if c.startswith('p_regime_')]
 
         logger.info("Backtesting %d prediction dates...", len(pred_dates))
@@ -95,7 +88,7 @@ class BacktestEngine:
             row = row.iloc[0]
 
             # OHLCV window for regime identification
-            loc = ohclv_df.index.get_indexer([dt], method='nearest')[0]
+            loc = ohlcv_df.index.get_indexer([dt], method='nearest')[0]
             if loc < 250:
                 # not enough history for 200-day MA
                 eq_records.append({
@@ -104,7 +97,7 @@ class BacktestEngine:
                 })
                 continue
 
-            win = ohclv_df.iloc[max(0, loc- 250): loc+1]
+            win = ohlcv_df.iloc[max(0, loc- 250): loc+1]
             h = win['high'].values
             l = win['low'].values
             c = win['close'].values
@@ -140,9 +133,9 @@ class BacktestEngine:
             cost = self.overlay.transaction_cost(w_prev, w_target)
 
             # daily return: position set at today's close, return next day
-            if loc + 1 < len(ohclv_df):
+            if loc + 1 < len(ohlcv_df):
                 next_ret = float(np.log(
-                    ohclv_df['close'].iloc[loc+1] / ohclv_df['close'].iloc[loc]
+                    ohlcv_df['close'].iloc[loc+1] / ohlcv_df['close'].iloc[loc]
                 ))
             else:
                 next_ret = 0.0
@@ -180,7 +173,7 @@ class BacktestEngine:
         summary = compute_economic_metrics(
             returns = ec_df['strategy_ret'].values,
             equity = ec_df['equity'].values,
-            weights = ec_df['weights'].values,
+            weights = ec_df['weight'].values,
             sigma_hat = ec_df['sigma_hat'].values,
             sigma_target= self.overlay.sigma_target,
             risk_free_rate= self.rfr,
@@ -205,9 +198,9 @@ class BacktestEngine:
 
         # benchmarks
         # get underlying returns aligned with backtest dates
-        undl_idx = ohclv_df.index.get_indexer(ec_df.index, method='nearest')
+        undl_idx = ohlcv_df.index.get_indexer(ec_df.index, method='nearest')
         undl_rets = np.array([
-            float(np.log(ohclv_df['close'].iloc[i+1] / ohclv_df['close'].iloc[i])) if i + 1 < len(ohclv_df) else 0.0 for i in undl_idx
+            float(np.log(ohlcv_df['close'].iloc[i+1] / ohlcv_df['close'].iloc[i])) if i + 1 < len(ohlcv_df) else 0.0 for i in undl_idx
         ])
         bmark = compute_benchmark_metrics(undl_rets, self.overlay.sigma_target, self.rfr, self.ann_factor)
 
@@ -215,7 +208,7 @@ class BacktestEngine:
         ec_df.to_csv(self.out_root / 'equity_curve.csv')
         pos_df.to_csv(self.out_root / 'position_history.csv', index=False)
 
-        with open(self.out_root / 'summary_json', 'w') as f:
+        with open(self.out_root / 'summary.json', 'w') as f:
             json.dump(summary, f, indent=2, default=str)
         with open(self.out_root / 'benchmark_summary.json', 'w') as f:
             json.dump(bmark, f, indent=2, default=str)

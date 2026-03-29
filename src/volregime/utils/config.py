@@ -1,4 +1,4 @@
-import yaml, os
+import yaml
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -7,23 +7,25 @@ def load_config():
     Load and merge all yaml configs. Returns a single nested dict.
     """
     load_dotenv()
+    root = get_project_root()
+    cfg_dir = root / 'configs'
 
-    with open("../../configs/default.yaml") as f:
+    with open(cfg_dir / "default.yaml") as f:
         default = yaml.safe_load(f)
 
-    with open("../../configs/data.yaml") as f:
+    with open(cfg_dir / "data.yaml") as f:
         data = yaml.safe_load(f)
 
-    with open("../../configs/model.yaml") as f:
+    with open(cfg_dir / "model.yaml") as f:
         model = yaml.safe_load(f)
 
-    with open("../../configs/training.yaml") as f:
+    with open(cfg_dir / "training.yaml") as f:
         training = yaml.safe_load(f)
         
-    with open("../../configs/backtest.yaml") as f:
+    with open(cfg_dir / "backtest.yaml") as f:
         backtest = yaml.safe_load(f)
 
-    with open("../../configs/symbols.yaml") as f:
+    with open(cfg_dir / "symbols.yaml") as f:
         symbols = yaml.safe_load(f)
 
     #merge into one dict

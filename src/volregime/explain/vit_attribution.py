@@ -30,7 +30,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-SURAFCE_CHANNELS = ['iv','spread_norm','obs_mask', 'staleness', 'delta', 'vega']
+SURFACE_CHANNELS = ['iv','spread_norm','obs_mask', 'staleness', 'delta', 'vega']
 
 GRID_H, GRID_W = 12, 20
 PATCH_H, PATCH_W = 3, 4
@@ -152,25 +152,26 @@ def _embed_surface_tokens(
     stopping before the TransformerEncoder.
 
     Assumes the ViT surface encoder has attributes:
-        patch_embed — Conv2d that maps (B,C,H,W) -> (B, D, nH, nW)
+        patch_embed — PatchEmbedding or Conv2d
         cls_token — nn.Parameter (1, 1, D)
         pos_embed — nn.Parameter (1, 1+N, D)
-
-    These match the standard ViT-style encoder built in models/surface_encoder.py.
     """
     se = surface_encoder
 
-    # patchify: Conv2d with stride = patch_size -> (B,D,n_h, n_w)
+    # (B, num_patches, embed_dim) if PatchEmbedding else (B, D, nH, nW) if Conv2d
     x = se.patch_embed(surface)
-    B, D, nh, nw = x.shape
-    x = x.flatten(2).transpose(1,2)
+    if x.ndim == 4:
+        B, D, nh, nw = x.shape
+        x = x.flatten(2).transpose(1, 2)
+    else:
+        B = x.shape[0]
 
     cls = se.cls_token.expand(B, -1, -1)
     x = torch.cat([cls, x], dim=1)
 
-    x = x + se.pos_embed[:,: x.shape[1], :]
+    x = x + se.pos_embed[:, : x.shape[1], :]
 
-    return x # (B, 21, D)
+    return x
 
 def _forward_transformer_with_attn(
     transformer: nn.TransformerEncoder,
@@ -249,7 +250,7 @@ def _compute_rollout(
 
 # general helpers
 
-def _extract_scalar(out_dict: dict, output: dict) -> torch.Tensor:
+def _extract_scalar(out_dict: dict, output: str) -> torch.Tensor:
     if output =='rv_forecast':
         return out_dict["rv_forecast"]
     if output == "tail_prob":
