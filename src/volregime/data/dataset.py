@@ -1,4 +1,3 @@
-from torch import __name
 import torch
 from torch.utils.data import Dataset
 import pandas as pd

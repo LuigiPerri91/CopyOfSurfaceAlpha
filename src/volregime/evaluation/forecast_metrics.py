@@ -39,7 +39,7 @@ def qlike(log_rv_pred: np.ndarray, log_rv_true:np.ndarray) -> float:
     t = np.asarray(log_rv_true, dtype = np.float64)
     return float(np.mean(2.0 * p + np.exp(2.0 * (t-p))))
 
-def q1_loss(log_rv_pred: np.ndarray, log_rv_true:np.ndarray) -> float:
+def ql_loss(log_rv_pred: np.ndarray, log_rv_true:np.ndarray) -> float:
     """MSE in log space (QL / log-MSE). Symmetric and scale-free"""
     d = np.asarray(log_rv_pred) - np.asarray(log_rv_true)
     return float(np.mean(d**2))
@@ -72,8 +72,8 @@ def hit_rate(rv_pred: np.ndarray, rv_true: np.ndarray, rv_prev: np.ndarray) -> f
     Fraction of dates where model correctly predicts direction of RV change.
     Requires prev-period RV as the baseline level.
     """
-    pred_up = np.asarray(rv_pred) > np.asarray(rv_pred)
-    true_up = np.asarray(rv_true) > np.asarray(rv_pred)
+    pred_up = np.asarray(rv_pred) > np.asarray(rv_prev)
+    true_up = np.asarray(rv_true) > np.asarray(rv_prev)
     return float(np.mean(pred_up == true_up))
 
 def compute_vol_metrics(log_rv_pred: np.ndarray, log_rv_true: np.ndarray, rv_prev: np.ndarray | None = None) -> dict[str,float]:
@@ -149,7 +149,7 @@ def compute_classification_metrics(
     # per-regime accuracy
     regime_names = ["bull_quiet", "bull_volatile", "bear_quiet","bear_volatile", "sideways_quiet", "sideways_volatile"]
     for k, name in enumerate(regime_names[:num_regimes]):
-        mask = np.ndarray(regime_true) == k
+        mask = np.asarray(regime_true) == k
         if mask.sum() >= 3:
             metrics[f'regime_acc_{name}'] = float(
                 (np.asarray(regime_pred)[mask] == k).mean()

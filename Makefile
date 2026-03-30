@@ -30,7 +30,7 @@ canonical:  ## Clean, join, and build canonical tables
 
 .PHONY: surfaces
 surfaces:  ## Build model-ready surface tensors + feature arrays
-	$(PYTHON) $(SCRIPTS)/build_surfaces.py
+	$(PYTHON) $(SCRIPTS)/build_surface.py
 
 .PHONY: data
 data: fetch canonical surfaces  ## Full data pipeline: fetch → clean → surfaces

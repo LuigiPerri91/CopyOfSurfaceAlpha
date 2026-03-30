@@ -17,11 +17,11 @@ class HARRVBaseline:
         self.intercept_ = None
         self.train_r2_ = None
 
-    def _build_features(self, rv_series: np.ndarray) -> np.ndarray:
-        n = len(rv_series)
-        rv_1d = rv_series
-        rv_5d = rv_series.rolling(5, min_periods=1).mean().to_numpy()
-        rv_21d = rv_series.rolling(21, min_periods=1).mean().to_numpy()
+    def _build_features(self, rv_series: np.ndarray | pd.Series) -> np.ndarray:
+        s = pd.Series(rv_series) if not isinstance(rv_series, pd.Series) else rv_series
+        rv_1d = s.to_numpy()
+        rv_5d = s.rolling(5, min_periods=1).mean().to_numpy()
+        rv_21d = s.rolling(21, min_periods=1).mean().to_numpy()
         return np.stack([rv_1d, rv_5d, rv_21d], axis=1)
 
     def fit(self, rv_series: np.ndarray, forward_rv:np.ndarray) -> None:

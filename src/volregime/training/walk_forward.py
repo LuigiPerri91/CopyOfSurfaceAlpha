@@ -183,16 +183,24 @@ class WalkForwardOrchestrator:
 
         return pd.DataFrame(records)
 
-    def run(self) -> list[dict]:
+    def run(self, start_fold: int = 0, end_fold: int | None = None) -> list[dict]:
         """
-        Execute all walk-forward folds. Returns list of per-fold result dicts.
+        Execute walk-forward folds. Returns list of per-fold result dicts.
+
+        Args:
+            start_fold: first fold index to run (inclusive). Use to resume after failure.
+            end_fold: last fold index to run (exclusive). None means run all remaining folds.
 
         Each result dict:
             {fold_idx, train_start, test_end, best_val_loss,
              n_test_samples, predictions_path}
         """
         fold_specs = self.compute_fold_specs()
-        logger.info("Walk-forward: %d folds", len(fold_specs))
+        fold_specs = [s for s in fold_specs if s.fold_idx >= start_fold]
+        if end_fold is not None:
+            fold_specs = [s for s in fold_specs if s.fold_idx < end_fold]
+        logger.info("Walk-forward: running folds %d-%s (%d total)",
+                    start_fold, end_fold - 1 if end_fold is not None else "end", len(fold_specs))
 
         wandb.init(
             project=self.cfg.get('wandb', {}).get('project','surfacealpha'),

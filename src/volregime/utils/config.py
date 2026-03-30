@@ -1,45 +1,39 @@
-import yaml, os
+import yaml
 from pathlib import Path
 from dotenv import load_dotenv
+from omegaconf import OmegaConf
 
 def load_config():
     """
     Load and merge all yaml configs. Returns a single nested dict.
     """
     load_dotenv()
+    root = get_project_root()
+    cfg_dir = root / 'configs'
 
-    with open("../../configs/default.yaml") as f:
-        default = yaml.safe_load(f)
+    default = OmegaConf.load(cfg_dir / "default.yaml")
+    data = OmegaConf.load(cfg_dir / "data.yaml")
+    model = OmegaConf.load(cfg_dir / "model.yaml")
+    training = OmegaConf.load(cfg_dir / "training.yaml")
+    backtest = OmegaConf.load(cfg_dir / "backtest.yaml")
+    symbols = OmegaConf.load(cfg_dir / "symbols.yaml")
 
-    with open("../../configs/data.yaml") as f:
-        data = yaml.safe_load(f)
+    config = OmegaConf.create({
+        **OmegaConf.to_container(default),
+        "data" : OmegaConf.to_container(data),
+        "model": OmegaConf.to_container(model),
+        "training": OmegaConf.to_container(training),
+        "backtest": OmegaConf.to_container(backtest),
+        "symbols": OmegaConf.to_container(symbols),
+    })
 
-    with open("../../configs/model.yaml") as f:
-        model = yaml.safe_load(f)
-
-    with open("../../configs/training.yaml") as f:
-        training = yaml.safe_load(f)
-        
-    with open("../../configs/backtest.yaml") as f:
-        backtest = yaml.safe_load(f)
-
-    with open("../../configs/symbols.yaml") as f:
-        symbols = yaml.safe_load(f)
-
-    #merge into one dict
-    config ={
-        **default,
-        "data" : data,
-        "model": model,
-        "training": training,
-        "backtest": backtest,
-        "symbols":symbols,
-    }
+    OmegaConf.resolve(config)
+    config_dict = OmegaConf.to_container(config, resolve=True)
 
     #resolve active_symbols from the pointer
-    config['active_symbols_list'] = symbols[default['active_symbols']]
+    config_dict['active_symbols_list'] = config_dict['symbols'][config_dict['active_symbols']]
 
-    return config
+    return config_dict
 
 def get_project_root():
     """Walk up from this file until we find pyproject.toml"""

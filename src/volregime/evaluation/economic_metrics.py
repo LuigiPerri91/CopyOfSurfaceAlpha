@@ -23,7 +23,7 @@ import pandas as pd
 def sharpe_ratio(returns: np.ndarray, risk_free_rate: float = 0.0, ann_factor: int = 252) -> float:
     """Annualized Sharpe ratio. Risk-free rate should be annualized."""
     r = np.asarray(returns, dtype=np.float64)
-    exc = r -risk_free_rate / ann_factor
+    exc = r - risk_free_rate / ann_factor
     std = exc.std()
     return float(exc.mean()/ std * np.sqrt(ann_factor)) if std >0 else 0.0
 
@@ -45,11 +45,12 @@ def max_drawdown(equity: np.ndarray) -> float:
     dd = (eq-peak) / peak
     return float(dd.min())
 
-def calmar_ratio(returns: np.ndarray, equity: np.ndarray, ann_factor: int =252) -> float:
+def calmar_ratio(returns: np.ndarray, equity: np.ndarray, ann_factor: int = 252) -> float:
     """Annualized return divided by absolute max drawdown"""
     ann_ret = float(np.asarray(returns).mean() * ann_factor)
-    mdd = abs(max_drawdown(equity))
-    return ann_ret / mdd if mdd > 1e-8 else 0.0
+    # use a small floor for MDD to avoid division by zero while maintaining sign
+    mdd = max(abs(max_drawdown(equity)), 1e-6)
+    return ann_ret / mdd
 
 def turnover(weights: np.ndarray, ann_factor: int =252) -> float:
     """
@@ -153,7 +154,7 @@ def compute_benchmark_metrics(
 
     # inverse vol (trailing RV vol-targeting, no model)
     window = 21
-    trail_rv = pd.Series(r).rolling(window).std().fillna(method='bfill').values
+    trail_rv = pd.Series(r).rolling(window).std().bfill().values
     trail_rv_ann = trail_rv * np.sqrt(ann_factor)
     iv_weights = np.clip(sigma_target / np.maximum(trail_rv_ann, 1e-4), 0.0, 1.5)
     iv_returns = np.roll(iv_weights, 1) * r

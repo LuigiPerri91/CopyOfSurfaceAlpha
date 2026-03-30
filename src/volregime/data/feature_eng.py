@@ -6,11 +6,7 @@ import yaml
 
 load_dotenv()
 
-with open('../configs/default.yaml','r') as f:
-    default = yaml.safe_load(f)
 
-with open('../configs/data.yaml','r') as f:
-    data = yaml.safe_load(f)
 
 logger = logging.getLogger(__name__)
 

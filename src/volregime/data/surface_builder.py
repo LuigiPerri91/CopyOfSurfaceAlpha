@@ -7,10 +7,17 @@ import yaml
 
 load_dotenv()
 
-with open('../configs/default.yaml','r') as f:
+from volregime.utils.config import get_project_root
+
+load_dotenv()
+
+root = get_project_root()
+cfg_dir = root / 'configs'
+
+with open(cfg_dir / 'default.yaml','r') as f:
     default = yaml.safe_load(f)
 
-with open('../configs/data.yaml','r') as f:
+with open(cfg_dir / 'data.yaml','r') as f:
     data = yaml.safe_load(f)
 
 logger = logging.getLogger(__name__)
@@ -61,7 +68,7 @@ def build_surface(option_rows, surface_config, is_gap_filled=False, gap_days=0):
     rows['log_m'] = np.log(rows['moneyness'])
 
     # initialize grids
-    num_channels = sum(data['surface']['channels'].values()) # iv, spread_norm, mask, staleness, delta, vega
+    num_channels = sum(data['channels'].values()) # iv, spread_norm, mask, staleness, delta, vega
     grid = np.zeros((num_channels, n_t, n_m), dtype=np.float32)
 
     # assign each option to nearest grid cell

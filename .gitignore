@@ -236,3 +236,8 @@ multirun/
 
 # ── macOS ──
 .DS_Store
+
+# Claude
+.claude
+
+.vscode

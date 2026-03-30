@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from doltpy.cli.dolt import Dolt
+from doltcli import Dolt
 
 logger = logging.getLogger(__name__)
 

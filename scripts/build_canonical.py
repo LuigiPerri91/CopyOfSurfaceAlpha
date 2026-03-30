@@ -19,8 +19,8 @@ from volregime.utils.config import load_config
 
 config = load_config()
 
-raw_dir = Path(config['default']['paths']['raw_dir'])
-canonical_dir = Path(config['default']['paths']['canonical_dir'])
+raw_dir = Path(config['paths']['raw_dir'])
+canonical_dir = Path(config['paths']['canonical_dir'])
 canonical_dir.mkdir(parents=True, exist_ok=True)
 
 # load raw data

@@ -111,7 +111,7 @@ def main():
     }
 
     logger.info("\n-- Aggregate metrics ------------------------------")
-    for cols, vals in agg.items():
+    for col, vals in agg.items():
         logger.info("  %-40s  %.4f ± %.4f", col, vals["mean"], vals["std"])
     
     # mincer zarnowitz test (on full pooled set)

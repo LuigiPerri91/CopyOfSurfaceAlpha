@@ -15,8 +15,8 @@ from volregime.utils.config import load_config
 
 config = load_config()
 
-canonical_dir = Path(config['default']['paths']['canonical_dir'])
-processed_dir = Path(config['default']['paths']['processed_dir'])
+canonical_dir = Path(config['paths']['canonical_dir'])
+processed_dir = Path(config['paths']['processed_dir'])
 
 # load canonical data
 options = pd.read_parquet(canonical_dir / "options_canonical.parquet")
@@ -24,7 +24,7 @@ underlying = pd.read_parquet(canonical_dir / "underlying_canonical.parquet")
 market_state = pd.read_parquet(canonical_dir / "market_state_canonical.parquet")
 vol_history = pd.read_parquet(canonical_dir / "vol_history_canonical.parquet")
 
-L = config['data']['returns']['lookback_horizon'] # 60
+L = config['data']['returns']['lookback_window'] # 60
 h = config['data']['targets']['forward_horizon'] # 21
 
 # precompute: merge SPY returns into underlying for beta calculation

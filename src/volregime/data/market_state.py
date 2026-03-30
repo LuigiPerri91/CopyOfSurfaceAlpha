@@ -34,8 +34,10 @@ def fetch_market_state(start, end, config_market_state):
     ## SPY returns
     if config_market_state.get('spy_return', True):
         logger.info("Fetching SPY for market returns...")
-        spy_raw = yf.download('SPY', start=start, end=end)
+        spy_raw = yf.download('SPY', start=start, end=end, auto_adjust=False)
         spy = spy_raw[['Adj Close']].copy()
+        if isinstance(spy.columns, pd.MultiIndex):
+            spy.columns = ['Adj Close']
         spy.columns = ['spy_adj_close']
         spy['spy_return'] = np.log(spy['spy_adj_close'] / spy['spy_adj_close'].shift(1))
         spy = spy[['spy_return']].copy()

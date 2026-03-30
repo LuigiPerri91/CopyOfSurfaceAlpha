@@ -45,7 +45,19 @@ def fetch_underlying(tickers, start, end, cache_dir=None):
                 else:
                     df = raw[ticker].copy()
 
-                df.columns = [c.lower().replace(" ", "_") for c in df.columns]
+                if isinstance(df.columns, pd.MultiIndex):
+                    metrics = ['open', 'high', 'low', 'close', 'adj close', 'volume']
+                    new_cols = []
+                    for c in df.columns:
+                        if str(c[0]).lower() in metrics:
+                            new_cols.append(str(c[0]).lower().replace(" ", "_"))
+                        elif str(c[-1]).lower() in metrics:
+                            new_cols.append(str(c[-1]).lower().replace(" ", "_"))
+                        else:
+                            new_cols.append(str(c[0]).lower().replace(" ", "_"))
+                    df.columns = new_cols
+                else:
+                    df.columns = [str(c).lower().replace(" ", "_") for c in df.columns]
 
                 if 'adj_close' not in df.columns and 'adj close' in df.columns:
                     df = df.rename(columns={"adj close": 'adj_close'})
@@ -60,7 +72,7 @@ def fetch_underlying(tickers, start, end, cache_dir=None):
                     raise ValueError(f"No data returned for {ticker}")
                 
                 date_series = pd.to_datetime(pd.Series([d for d in df['date']]))
-                gaps = date_series.diff().dt.date
+                gaps = date_series.diff().dt.days
                 max_gap = gaps.max()
                 if max_gap > 7:
                     logger.warning("%s has a %d-gap in price data", ticker, max_gap)

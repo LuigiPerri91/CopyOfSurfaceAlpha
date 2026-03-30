@@ -21,8 +21,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import wandb
 
-from .utils.io import save_checkpoint, load_checkpoint
-from .losses import SurfaceAlphaModel, SingleTaskLoss
+from ..utils.io import save_checkpoint, load_checkpoint
+from .losses import SurfaceAlphaLoss, SingleTaskLoss
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class Trainer:
         
         # loss
         if model_type == 'full':
-            self.loss_fn = SurfaceAlphaModel(cfg_train)
+            self.loss_fn = SurfaceAlphaLoss(cfg_train)
         else:
             self.loss_fn = SingleTaskLoss(float(cfg_train.get('huber_delta',1.0)))
 

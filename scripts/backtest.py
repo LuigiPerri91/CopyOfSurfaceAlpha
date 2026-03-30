@@ -9,7 +9,7 @@ Usage:
     python scripts/backtest.py --predictions-dir outputs/predictions
     python scripts/backtest.py --output ./runs/backtest_v1
 """
-from numpy import isin
+
 import argparse
 import logging
 import os
@@ -63,7 +63,7 @@ def main():
 
     ohlcv_path = args.ohlcv or data_dir / 'raw' / 'underlying' / f'{active_sym}.parquet'
     if not Path(ohlcv_path).exists():
-        logger.error("OHLCV file not foudn: %s", ohlcv_path)
+        logger.error("OHLCV file not found: %s", ohlcv_path)
         sys.exit(1)
     
     ohlcv_df = pd.read_parquet(ohlcv_path)

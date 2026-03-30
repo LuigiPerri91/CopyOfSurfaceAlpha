@@ -56,6 +56,8 @@ def diebold_mariano(
         raise ValueError(f"Need at least h+1={h+1} observations, got {len(a)}")
 
     d = a - b  # loss differential series
+    if np.allclose(d, 0.0, atol=1e-12):
+        return 0.0, 1.0
 
     # OLS of d on a constant -> intercept = mean(d), residuals = d - mean(d)
     # Using HAC (Newey-West) covariance with nlags = h-1, as per the original paper.
@@ -66,6 +68,9 @@ def diebold_mariano(
 
     dm_stat = float(res.tvalues[0])
     p_value = float(res.pvalues[0])   # two-sided by default in statsmodels
+
+    if np.isnan(dm_stat) or np.isnan(p_value):
+        return 0.0, 1.0
 
     return dm_stat, p_value
 
@@ -101,6 +106,13 @@ def mincer_zarnowitz(
     if len(p) != len(t):
         raise ValueError(f"Arrays must have the same length: {len(p)} vs {len(t)}")
 
+    # perfect forecast edge case
+    if np.allclose(p, t, atol=1e-10):
+        return {
+            'intercept': 0.0, 'slope': 1.0, 'r2': 1.0,
+            'f_stat': 0.0, 'f_pvalue': 1.0, 'n': int(len(p))
+        }
+
     X = sm.add_constant(p)   # shape (N, 2): [1, rv_pred]
     res = sm.OLS(t, X).fit()
 
@@ -111,9 +123,13 @@ def mincer_zarnowitz(
     # F-test for joint restriction: intercept=0, slope=1
     # R_matrix selects [intercept, slope], q_vector is [0, 1]
     hypotheses = '(const = 0), (x1 = 1)'
-    f_test = res.f_test(hypotheses)
-    f_stat = float(f_test.fvalue.item() if hasattr(f_test.fvalue, 'item') else f_test.fvalue)
-    f_pvalue = float(f_test.pvalue.item() if hasattr(f_test.pvalue, 'item') else f_test.pvalue)
+    try:
+        f_test = res.f_test(hypotheses)
+        f_stat = float(f_test.fvalue.item() if hasattr(f_test.fvalue, 'item') else f_test.fvalue)
+        f_pvalue = float(f_test.pvalue.item() if hasattr(f_test.pvalue, 'item') else f_test.pvalue)
+    except Exception:
+        # Fallback if F-test fails (e.g. singular matrix or zero residuals)
+        f_stat, f_pvalue = 0.0, 1.0
 
     return {
         'intercept': round(intercept, 6),
