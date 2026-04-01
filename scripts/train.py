@@ -13,7 +13,6 @@ import logging
 import sys
 from pathlib import Path
 import yaml
-import os
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/ 'src'))
@@ -45,9 +44,8 @@ def main():
     cfg = load_config()
 
     # dataset
-    data_dir = Path(os.environ.get('DATA_DIR', project_root / 'data'))
-    sample_index = data_dir / 'processed' / 'sample_index.parquet'
-    processed_dir = data_dir / 'processed'
+    sample_index = Path(cfg['paths']['processed_dir']) / 'sample_index.parquet'
+    processed_dir = Path(cfg['paths']['processed_dir'])
 
     logger.info('Loading dataset from %s', sample_index)
     dataset = SurfaceAlphaDataset(sample_index, processed_dir)

@@ -1,0 +1,44 @@
+{
+  "bull_quiet": [
+    "hv_momentum_medium",
+    "iv_momentum_medium",
+    "days_since_hv_year_low",
+    "days_since_iv_year_high",
+    "days_since_iv_year_low"
+  ],
+  "bull_volatile": [
+    "hv_momentum_medium",
+    "iv_momentum_medium",
+    "days_since_hv_year_low",
+    "days_since_iv_year_high",
+    "days_since_iv_year_low"
+  ],
+  "bear_quiet": [
+    "hv_momentum_medium",
+    "iv_momentum_medium",
+    "days_since_hv_year_low",
+    "days_since_iv_year_high",
+    "days_since_iv_year_low"
+  ],
+  "bear_volatile": [
+    "hv_momentum_medium",
+    "iv_momentum_medium",
+    "days_since_hv_year_low",
+    "days_since_iv_year_low",
+    "days_since_iv_year_high"
+  ],
+  "sideways_quiet": [
+    "hv_momentum_medium",
+    "iv_momentum_medium",
+    "days_since_hv_year_low",
+    "days_since_iv_year_high",
+    "days_since_iv_year_low"
+  ],
+  "sideways_volatile": [
+    "hv_momentum_medium",
+    "iv_momentum_medium",
+    "days_since_hv_year_low",
+    "days_since_iv_year_low",
+    "days_since_hv_year_high"
+  ]
+}

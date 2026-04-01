@@ -118,7 +118,11 @@ def build_surface(option_rows, surface_config, is_gap_filled=False, gap_days=0):
         if len(target_coords) > 0:
             for c in [0,1,4,5]:
                 observed_values = grid[c][mask>0]
-                interpolated = griddata(observed_coords, observed_values, target_coords, method=interp_method, fill_value=0.0)
+                try:
+                    interpolated = griddata(observed_coords, observed_values, target_coords, method=interp_method, fill_value=0.0)
+                except Exception:
+                    # fall back to nearest when points are collinear / degenerate
+                    interpolated = griddata(observed_coords, observed_values, target_coords, method='nearest', fill_value=0.0)
                 for k, (ti, mi) in enumerate(target_coords):
                     # only fill if interpolation succeeded (not NaN)
                     if not np.isnan(interpolated[k]):

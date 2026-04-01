@@ -15,22 +15,28 @@ Config keys (cfg["training"]):
 """
 
 from torch import tensor
-import torch 
-import torch.nn as nn 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 class SurfaceAlphaLoss(nn.Module):
-    def __init__(self, cfg: dict):
-        """Args: cfg = cfg["training"] (the training sub-config)."""
+    def __init__(self, cfg: dict, regime_class_weights: "torch.Tensor | None" = None):
+        """Args:
+            cfg: cfg["training"] (the training sub-config).
+            regime_class_weights: optional float32 tensor of shape (n_classes,) passed to
+                CrossEntropyLoss to correct for class imbalance in the regime head.
+        """
         super().__init__()
         w = cfg.get('loss_weights',{})
         self.lambda_vol = float(w.get('lambda_vol', 1.0))
         self.lambda_tail = float(w.get('lambda_tail', 0.3))
-        self.lambda_reg = float(w.get('lambda_reg',0.2))
+        self.lambda_reg = float(w.get('lambda_reg', 0.5))
         self.lambda_smooth = float(w.get('lambda_smooth', 0.05))
 
         self.huber = nn.HuberLoss(delta=float(cfg.get('huber_delta', 1.0)), reduction='mean')
-        self.bce = nn.BCELoss(reduction='mean')
-        self.ce = nn.CrossEntropyLoss(reduction='mean')
+        # pos_weight for tail BCE: upweights positives (~22% base rate → weight ≈ 2.0)
+        self.tail_pos_weight = float(cfg.get('tail_pos_weight', 2.0))
+        self.ce = nn.CrossEntropyLoss(weight=regime_class_weights, reduction='mean')
     
     def forward(self,outputs: dict[str, torch.Tensor], batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, dict[str, float]]:
         """
@@ -44,7 +50,11 @@ class SurfaceAlphaLoss(nn.Module):
             total_loss, {component: float}
         """
         l_vol = self.huber(outputs['rv_forecast'], batch['target_rv'])
-        l_tail = self.bce(outputs['tail_prob'], batch['target_tail'].float())
+        t = batch['target_tail'].float()
+        w = torch.where(t > 0.5,
+                        torch.full_like(t, self.tail_pos_weight),
+                        torch.ones_like(t))
+        l_tail = F.binary_cross_entropy(outputs['tail_prob'], t, weight=w)
         l_reg = self.ce(outputs['regime_logits'], batch['target_regime'].long())
         l_smooth = outputs['expert_preds'].var(dim=1).mean() # (B,K) -> var over K
 

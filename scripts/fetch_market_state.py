@@ -16,6 +16,11 @@ raw_dir = Path(cfg['paths']['raw_dir'])
 # pad start for indicator warmup
 padded_start = (pd.Timestamp(start) - pd.DateOffset(days=300)).strftime("%Y-%m-%d")
 
+market_state_path = raw_dir / "market_state.parquet"
+if market_state_path.exists():
+    print("market_state.parquet already exists — skipping fetch. Run 'make clean-data' to re-fetch.")
+    import sys; sys.exit(0)
+
 print(f"Fetching market state, padded range {padded_start} -> {end}")
 
 market_df = fetch_market_state(padded_start, end, market_state_cfg)

@@ -1,0 +1,10 @@
+{
+  "fold_idx": 4,
+  "train_start": "2015-01-02",
+  "train_end": "2019-01-04",
+  "test_start": "2019-04-15",
+  "test_end": "2019-07-15",
+  "best_val_loss": 0.2693099081516266,
+  "n_test_samples": 63,
+  "predictions_path": "runs/pilot/outputs/predictions/fold_4_test_preds.parquet"
+}

@@ -15,7 +15,7 @@ class ContextEncoder(nn.Module):
         super().__init__()
         if hidden_dims is None:
             hidden_dims = [64,32]
-        layers, d = [], input_dim
+        layers, d = [nn.LayerNorm(input_dim)], input_dim
         for h in hidden_dims:
             layers += [nn.Linear(d,h), nn.GELU(), nn.Dropout(dropout)]
             d = h

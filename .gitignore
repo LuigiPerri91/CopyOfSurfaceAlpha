@@ -219,8 +219,9 @@ data/processed/
 !data/processed/.gitkeep
 
 # ── Model artifacts ──
-outputs/
+data/
 checkpoints/
+predictions/
 *.pt
 *.ckpt
 *.pth

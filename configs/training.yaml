@@ -15,7 +15,7 @@ optimizer:
 scheduler:
   name: cosine                    # "cosine" or "plateau"
   # Cosine annealing
-  cosine_t_max: 1000               # match num_epochs
+  cosine_t_max: 300                # ~realistic training window given early stopping
   cosine_eta_min: 0.000001
   # Reduce on plateau
   plateau_factor: 0.5
@@ -31,7 +31,7 @@ gradient_clip_norm: 1.0
 # ── Early stopping ──
 early_stopping:
   enabled: true
-  patience: 10                    # epochs without val improvement
+  patience: 100                   # epochs without val improvement
   monitor: val_loss
   min_delta: 0.0001               # minimum change to count as improvement
 
@@ -39,12 +39,12 @@ early_stopping:
 # L = lv*L_vol + lt*L_tail + lr*L_reg + ls*L_smooth
 loss_weights:
   lambda_vol: 1.0                 # Huber on log(RV) — primary objective
-  lambda_tail: 0.3                # BCE for tail-risk
-  lambda_reg: 0.2                 # CE for regime classification
+  lambda_tail: 0.1                # BCE for tail-risk
+  lambda_reg: 0.15                # CE for regime classification
   lambda_smooth: 0.05             # surface regularization
 
 # ── Huber loss ──
-huber_delta: 1.0
+huber_delta: 0.5
 
 # ── Walk-forward cross-validation ──
 walk_forward:
@@ -76,6 +76,6 @@ baselines:
 
 # ── Data loading ──
 dataloader:
-  num_workers: 4
-  pin_memory: true
+  num_workers: 0
+  pin_memory: false
   prefetch_factor: 2

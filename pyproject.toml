@@ -36,6 +36,7 @@ dependencies = [
     "shap>=0.42",
 
     # ── Data sources ──
+    "requests>=2.31",             # philippdubach flat-file downloads
     "yfinance>=0.2.30",           # Underlying OHLCV + VIX
     "doltcli>=0.1.18",            # DoltHub option_chain + volatility_history
 

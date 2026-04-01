@@ -12,7 +12,6 @@ Usage:
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -58,16 +57,18 @@ def main():
     logger.info('Loaded %d prediction rows for %d folds', len(preds_df), len(pred_files))
 
     # load OHLCV
-    data_dir = Path(os.environ.get('DATA_DIR', project_root / 'data'))
+    raw_dir = Path(cfg['paths']['raw_dir'])
     active_sym = cfg.get('active_symbols_list', ['SPY'])[0] # use first symbol
 
-    ohlcv_path = args.ohlcv or data_dir / 'raw' / 'underlying' / f'{active_sym}.parquet'
+    ohlcv_path = args.ohlcv or raw_dir / 'underlying' / f'{active_sym}.parquet'
     if not Path(ohlcv_path).exists():
         logger.error("OHLCV file not found: %s", ohlcv_path)
         sys.exit(1)
     
     ohlcv_df = pd.read_parquet(ohlcv_path)
-    # ensure index is parseable as dates 
+    # ensure index is a DatetimeIndex — parquet may store dates as a column
+    if 'date' in ohlcv_df.columns:
+        ohlcv_df = ohlcv_df.set_index('date')
     if not isinstance(ohlcv_df.index, pd.DatetimeIndex):
         ohlcv_df.index = pd.to_datetime(ohlcv_df.index)
     ohlcv_df = ohlcv_df.sort_index()
@@ -75,9 +76,11 @@ def main():
 
     # load vix (optional)
     vix_series = None
-    vix_path = args.vix or data_dir / 'raw' / 'underlying' / '^VIX.parquet'
+    vix_path = args.vix or raw_dir / 'underlying' / '^VIX.parquet'
     if Path(vix_path).exists():
         vix_df = pd.read_parquet(vix_path)
+        if 'date' in vix_df.columns:
+            vix_df = vix_df.set_index('date')
         vix_df.index = pd.to_datetime(vix_df.index)
         vix_series = vix_df['close'].sort_index()
         logger.info("VIX loaded: %d rows", len(vix_series))

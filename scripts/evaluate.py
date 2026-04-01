@@ -133,12 +133,58 @@ def main():
         regime_rows = [{'regime': r, **m} for r,m in per_regime.items()]
         pd.DataFrame(regime_rows).to_csv(out_dir / "per_regime_metrics.csv", index=False)
 
+    # Baseline comparison
+    baseline_metrics: dict = {}
+    bl_files = sorted(pred_dir.glob("fold_*_baseline_preds.parquet"))
+    if bl_files:
+        bl_dfs = []
+        for p in bl_files:
+            fold_idx = int(p.stem.split('_')[1])
+            df = pd.read_parquet(p)
+            df['fold'] = fold_idx
+            bl_dfs.append(df)
+        all_bl = pd.concat(bl_dfs, ignore_index=True)
+
+        bl_cols = [c for c in all_bl.columns if c not in ('date', 'symbol', 'target_rv', 'fold')]
+        for bl_name in bl_cols:
+            fold_rows = []
+            for fold_idx, fdf in all_bl.groupby('fold'):
+                valid = fdf[bl_name].notna()
+                if valid.sum() < 5:
+                    continue
+                m = compute_vol_metrics(fdf.loc[valid, bl_name].values,
+                                        fdf.loc[valid, 'target_rv'].values)
+                fold_rows.append(m)
+            if fold_rows:
+                agg_bl = pd.DataFrame(fold_rows)
+                baseline_metrics[bl_name] = {
+                    col: {'mean': float(agg_bl[col].mean()), 'std': float(agg_bl[col].std())}
+                    for col in agg_bl.columns
+                }
+
+        logger.info("\n-- Model vs Baseline (mean across folds) ---------")
+        header = f"  {'model':<22}  {'QLIKE':>8}  {'QL':>8}  {'MAPE':>8}  {'R2':>8}"
+        logger.info(header)
+        logger.info("  " + "-" * (len(header) - 2))
+        logger.info("  %-22s  %8.4f  %8.4f  %8.4f  %8.4f", "surfacealpha",
+                    agg.get('vol_qlike', {}).get('mean', float('nan')),
+                    agg.get('vol_ql', {}).get('mean', float('nan')),
+                    agg.get('vol_mape', {}).get('mean', float('nan')),
+                    agg.get('vol_r2', {}).get('mean', float('nan')))
+        for bl_name, m in baseline_metrics.items():
+            logger.info("  %-22s  %8.4f  %8.4f  %8.4f  %8.4f", bl_name,
+                        m.get('qlike', {}).get('mean', float('nan')),
+                        m.get('ql', {}).get('mean', float('nan')),
+                        m.get('mape', {}).get('mean', float('nan')),
+                        m.get('r2', {}).get('mean', float('nan')))
+
     # save full report
     report = {
-        'n_folds' : len(dfs),
+        'n_folds': len(dfs),
         'n_samples': len(all_preds),
-        'aggregate': {k : {'mean': v['mean'], 'std': v['std']} for k,v in agg.items()},
-        'mincer_zarnowitz': mz
+        'aggregate': {k: {'mean': v['mean'], 'std': v['std']} for k, v in agg.items()},
+        'mincer_zarnowitz': mz,
+        'baseline_metrics': baseline_metrics,
     }
     with open(out_dir / 'evaluation_report.json', 'w') as f:
         json.dump(report, f, indent=2, default=str)

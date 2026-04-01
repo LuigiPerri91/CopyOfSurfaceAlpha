@@ -98,12 +98,12 @@ class _ContextWrapper(nn.Module):
         out = self.model(surface, returns, vol_history, market_state)
 
         if self.output == 'rv_forecast':
-            return out['rv_forecast']
+            return out['rv_forecast'].unsqueeze(-1)
         if self.output == 'tail_prob':
-            return out['tail_prob']
+            return out['tail_prob'].unsqueeze(-1)
         if self.output.startswith('regime_'):
             k = int(self.output.split('_')[1])
-            return out['regime_probs'][:, k]
+            return out['regime_probs'][:, k].unsqueeze(-1)
         raise ValueError(f"Unknown output target: {self.output!r}")
 
 class SHAPExplainer: 
@@ -165,7 +165,10 @@ class SHAPExplainer:
         """
         x = torch.tensor(context, dtype=torch.float32, device=self.device)
         shap_vals = self.explainer.shap_values(x, nsamples=n_samples)
-        shap_arr = np.array(shap_vals)
+        # GradientExplainer returns list[(N, 14[, 1])] when output is (B, 1) — take index 0
+        shap_arr = np.array(shap_vals[0] if isinstance(shap_vals, list) else shap_vals)
+        if shap_arr.ndim == 3:
+            shap_arr = shap_arr.squeeze(-1)  # (N, 14, 1) -> (N, 14)
 
         with torch.no_grad():
             bg = torch.tensor(self._background, dtype=torch.float32, device=self.device)

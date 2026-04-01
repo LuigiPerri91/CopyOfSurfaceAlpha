@@ -37,4 +37,4 @@ logging:
 
 # ── Active symbol set (pointer into symbols.yaml) ──
 # Change this single line to scale from pilot → full universe
-active_symbols: pilot
+active_symbols: ${oc.env:ACTIVE_SYMBOLS,pilot}

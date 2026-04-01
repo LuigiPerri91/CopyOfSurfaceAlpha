@@ -1,0 +1,7 @@
+,iv_rank,hv_rank,vol_risk_premium,iv_momentum_short,iv_momentum_medium,hv_momentum_short,hv_momentum_medium,days_since_iv_year_high,days_since_iv_year_low,days_since_hv_year_high,days_since_hv_year_low,vix,spy_return,risk_free_rate
+bull_quiet,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+bull_volatile,0.17347466945648193,0.15132874250411987,0.01907300017774105,-0.0018920005531981587,,-0.009854506701231003,,167.2050018310547,249.59500122070312,151.2050018310547,183.02999877929688,17.46650505065918,0.001132385921664536,0.00015555131540168077
+bear_quiet,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+bear_volatile,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+sideways_quiet,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+sideways_volatile,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0

@@ -23,6 +23,11 @@ sym_map = SymbolMap(overrides_from_config=cfg['symbols'].get("symbol_overrides")
 ticker_mapping, skipped = sym_map.resolve_all(active_symbols)
 yf_tickers = list(ticker_mapping.values())
 
+combined_path = raw_dir / "underlying_all.parquet"
+if combined_path.exists():
+    print(f"underlying_all.parquet already exists — skipping fetch. Run 'make clean-data' to re-fetch.")
+    sys.exit(0)
+
 print(f"Fetching underlying for {len(yf_tickers)} tickers, padded range {padded_start} -> {end}")
 
 #download all via yfinance (batched)

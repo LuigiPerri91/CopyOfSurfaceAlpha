@@ -1,16 +1,21 @@
 """
-DoltHub client wrapper for the post-no-preference/options repository.
+DoltHub client for the post-no-preference/options repository.
 
-Handles cloning, querying option_chain and volatility_history tables,
-and recording provenance metadata for reproducibility.
+Supports two access modes (set via configs/data.yaml dolthub.access_method):
+
+  "api"   — HTTP SQL API (default, recommended).
+            Queries DoltHub directly over HTTPS. No local clone required.
+            Fast for small date windows (e.g. the recent 3-month gap).
+
+  "clone" — Local Dolt clone (legacy).
+            Clones the full repo locally then queries via SQL.
+            Slow on first run (repo is multi-GB), fast after caching.
+            Use only if you need offline access or the full history.
 
 Usage:
-    client = DoltClient(repo="post-no-preference/options", clone_dir="./data/raw/dolt_clone")
-    client.connect()  # clones if needed, or opens existing
-
-    df = client.query_option_chain(symbols=["SPY"], start="2020-01-01", end="2024-12-31")
-    df = client.query_vol_history(symbols=["SPY"], start="2020-01-01", end="2024-12-31")
-
+    client = DoltClient(repo="post-no-preference/options", access_method="api")
+    df = client.query_option_chain(["SPY"], "2025-12-17", "2026-03-20")
+    df = client.query_vol_history(["SPY"], "2025-12-17", "2026-03-20")
     meta = client.get_provenance()
 """
 
@@ -24,33 +29,62 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from doltcli import Dolt
+import requests
 
 logger = logging.getLogger(__name__)
 
+_DOLTHUB_API = "https://www.dolthub.com/api/v1alpha1"
+
 
 class DoltClient:
-    """Wrapper around a local Dolt clone of the options repository."""
+    """
+    DoltHub options client.
 
-    def __init__(self, repo: str, clone_dir: str | Path) -> None:
+    Defaults to the HTTP API mode — no clone, no pull, just fast SQL over HTTPS.
+    Pass access_method="clone" to use the legacy local-clone approach.
+    """
+
+    def __init__(
+        self,
+        repo: str,
+        access_method: str = "api",
+        clone_dir: str | Path | None = None,
+        branch: str = "master",
+    ) -> None:
         """
         Args:
-            repo: DoltHub repository path, e.g. "post-no-preference/options".
-            clone_dir: Local directory to clone into (or where an existing clone lives).
+            repo:          DoltHub repo path, e.g. "post-no-preference/options".
+            access_method: "api" (HTTP SQL, fast) or "clone" (local clone, slow).
+            clone_dir:     Required when access_method="clone".
+            branch:        DoltHub branch to query (default "main").
         """
         self.repo = repo
-        self.clone_dir = Path(clone_dir)
-        self._dolt: Optional[Dolt] = None
+        self.access_method = access_method
+        self.branch = branch
+        self.clone_dir = Path(clone_dir) if clone_dir else None
+
+        # API key (optional — increases rate limits and unlocks private repos)
+        api_key = os.environ.get("DOLTHUB_TOKEN", "") or os.environ.get("DOLTHUB_API_KEY", "")
+        self._api_headers: dict[str, str] = (
+            {"authorization": api_key} if api_key else {}
+        )
+
+        # clone-mode internals
+        self._dolt = None
         self._commit_hash: Optional[str] = None
 
     # ──────────────────────────────────────────────
-    # Connection
+    # Connection (clone mode only)
     # ──────────────────────────────────────────────
 
     def connect(self) -> None:
-        """Clone the repo if it doesn't exist locally, otherwise open the existing clone."""
-        dolt_meta_dir = self.clone_dir / ".dolt"
+        """Clone mode: clone the repo if needed, otherwise open the existing clone."""
+        if self.access_method == "api":
+            return  # no connection needed for API mode
 
+        from doltcli import Dolt
+        assert self.clone_dir is not None, "clone_dir is required for access_method='clone'"
+        dolt_meta_dir = self.clone_dir / ".dolt"
         if dolt_meta_dir.is_dir():
             logger.info("Opening existing Dolt clone at %s", self.clone_dir)
             self._dolt = Dolt(str(self.clone_dir))
@@ -58,13 +92,14 @@ class DoltClient:
             logger.info("Cloning %s → %s (this may take a while on first run)", self.repo, self.clone_dir)
             self.clone_dir.parent.mkdir(parents=True, exist_ok=True)
             self._dolt = Dolt.clone(self.repo, str(self.clone_dir))
-
         self._commit_hash = self._dolt.head
         logger.info("Connected — commit %s, branch %s", self._commit_hash[:12], self._dolt.active_branch)
 
     def pull(self) -> None:
-        """Pull latest changes from DoltHub remote."""
-        self._ensure_connected()
+        """Clone mode: pull latest changes from DoltHub remote."""
+        if self.access_method == "api":
+            return  # API mode always queries latest
+        self._ensure_clone_connected()
         old_hash = self._commit_hash
         self._dolt.pull("origin")
         self._commit_hash = self._dolt.head
@@ -73,10 +108,7 @@ class DoltClient:
         else:
             logger.info("Already up to date at %s", self._commit_hash[:12])
 
-    # ──────────────────────────────────────────────
     # Queries
-    # ──────────────────────────────────────────────
-
     def query_option_chain(
         self,
         symbols: list[str],
@@ -87,59 +119,33 @@ class DoltClient:
         """
         Query the option_chain table for the given symbols and date range.
 
-        DoltHub schema (all from decimal types, returned as strings by doltpy):
-            date          DATE         (PK)
-            act_symbol    VARCHAR(64)  (PK)
-            expiration    DATE         (PK)
-            strike        DECIMAL(7,2) (PK)
-            call_put      VARCHAR(64)  (PK)
-            bid           DECIMAL(7,2)
-            ask           DECIMAL(7,2)
-            vol           DECIMAL(5,4)  ← this is implied volatility
-            delta         DECIMAL(5,4)
-            gamma         DECIMAL(5,4)
-            theta         DECIMAL(5,4)
-            vega          DECIMAL(5,4)
-            rho           DECIMAL(5,4)
-
-        Args:
-            symbols: List of act_symbol values, e.g. ["SPY", "AAPL"].
-            start: Start date inclusive, ISO format "YYYY-MM-DD".
-            end: End date inclusive, ISO format "YYYY-MM-DD".
-            batch_size: Max rows per query (pagination for large pulls).
-
-        Returns:
-            DataFrame with all columns, types cast from strings to proper dtypes.
+        Schema:
+            date, act_symbol, expiration, strike, call_put,
+            bid, ask, vol, delta, gamma, theta, vega, rho
         """
-        self._ensure_connected()
-
         frames: list[pd.DataFrame] = []
         for symbol in symbols:
             logger.info("Querying option_chain for %s [%s → %s]", symbol, start, end)
-            offset = 0
-            while True:
-                query = (
+            if self.access_method == "api":
+                # Range queries hit a server-side deadline; query one date at a time instead.
+                df = self._query_api_by_date(
+                    table="option_chain",
+                    cols="date, act_symbol, expiration, strike, call_put, bid, ask, vol, delta, gamma, theta, vega, rho",
+                    symbol=symbol,
+                    start=start,
+                    end=end,
+                )
+            else:
+                sql = (
                     f"SELECT date, act_symbol, expiration, strike, call_put, "
-                    f"       bid, ask, vol, delta, gamma, theta, vega, rho "
+                    f"bid, ask, vol, delta, gamma, theta, vega, rho "
                     f"FROM option_chain "
                     f"WHERE act_symbol = '{symbol}' "
-                    f"  AND date >= '{start}' "
-                    f"  AND date <= '{end}' "
-                    f"ORDER BY date, expiration, strike, call_put "
-                    f"LIMIT {batch_size} OFFSET {offset}"
+                    f"  AND date >= '{start}' AND date <= '{end}'"
                 )
-                rows = self._dolt.sql(query, result_format="csv")
-
-                if not rows:
-                    break
-
-                df_batch = pd.DataFrame(rows)
-                frames.append(df_batch)
-                logger.debug("  %s: fetched %d rows (offset=%d)", symbol, len(df_batch), offset)
-
-                if len(rows) < batch_size:
-                    break
-                offset += batch_size
+                df = self._query(sql, batch_size)
+            if not df.empty:
+                frames.append(df)
 
         if not frames:
             logger.warning("No option_chain data returned for symbols=%s", symbols)
@@ -147,7 +153,6 @@ class DoltClient:
 
         df = pd.concat(frames, ignore_index=True)
         df = self._cast_option_chain_dtypes(df)
-
         logger.info(
             "option_chain: %d rows, %d symbols, dates %s → %s",
             len(df), df["act_symbol"].nunique(), df["date"].min(), df["date"].max(),
@@ -164,60 +169,31 @@ class DoltClient:
         """
         Query the volatility_history table for the given symbols and date range.
 
-        DoltHub schema:
-            date                DATE         (PK)
-            act_symbol          VARCHAR(64)  (PK)
-            hv_current          DECIMAL(5,4)
-            hv_week_ago         DECIMAL(5,4)
-            hv_month_ago        DECIMAL(5,4)
-            hv_year_high        DECIMAL(5,4)
-            hv_year_high_date   DATE
-            hv_year_low         DECIMAL(5,4)
-            hv_year_low_date    DATE
-            iv_current          DECIMAL(5,4)
-            iv_week_ago         DECIMAL(5,4)
-            iv_month_ago        DECIMAL(5,4)
-            iv_year_high        DECIMAL(5,4)
-            iv_year_high_date   DATE
-            iv_year_low         DECIMAL(5,4)
-            iv_year_low_date    DATE
-
-        Args:
-            symbols: List of act_symbol values.
-            start: Start date inclusive, ISO format.
-            end: End date inclusive, ISO format.
-            batch_size: Max rows per query.
-
-        Returns:
-            DataFrame with proper dtypes.
+        Schema:
+            date, act_symbol,
+            hv_current/week_ago/month_ago/year_high/year_high_date/year_low/year_low_date,
+            iv_current/week_ago/month_ago/year_high/year_high_date/year_low/year_low_date
         """
-        self._ensure_connected()
-
         frames: list[pd.DataFrame] = []
         for symbol in symbols:
             logger.info("Querying volatility_history for %s [%s → %s]", symbol, start, end)
-            offset = 0
-            while True:
-                query = (
+            if self.access_method == "api":
+                df = self._query_api_by_date(
+                    table="volatility_history",
+                    cols="*",
+                    symbol=symbol,
+                    start=start,
+                    end=end,
+                )
+            else:
+                sql = (
                     f"SELECT * FROM volatility_history "
                     f"WHERE act_symbol = '{symbol}' "
-                    f"  AND date >= '{start}' "
-                    f"  AND date <= '{end}' "
-                    f"ORDER BY date "
-                    f"LIMIT {batch_size} OFFSET {offset}"
+                    f"  AND date >= '{start}' AND date <= '{end}'"
                 )
-                rows = self._dolt.sql(query, result_format="csv")
-
-                if not rows:
-                    break
-
-                df_batch = pd.DataFrame(rows)
-                frames.append(df_batch)
-                logger.debug("  %s: fetched %d rows (offset=%d)", symbol, len(df_batch), offset)
-
-                if len(rows) < batch_size:
-                    break
-                offset += batch_size
+                df = self._query(sql, batch_size)
+            if not df.empty:
+                frames.append(df)
 
         if not frames:
             logger.warning("No volatility_history data returned for symbols=%s", symbols)
@@ -225,113 +201,143 @@ class DoltClient:
 
         df = pd.concat(frames, ignore_index=True)
         df = self._cast_vol_history_dtypes(df)
-
         logger.info(
             "volatility_history: %d rows, %d symbols, dates %s → %s",
             len(df), df["act_symbol"].nunique(), df["date"].min(), df["date"].max(),
         )
         return df
 
-    # ──────────────────────────────────────────────
     # Provenance
-    # ──────────────────────────────────────────────
-
     def get_provenance(self) -> dict:
-        """
-        Return a metadata dict for reproducibility. Save this alongside
-        your raw data so anyone can reconstruct the exact same extraction.
-        """
-        self._ensure_connected()
-        return {
+        meta: dict = {
             "dolthub_repo": self.repo,
-            "dolt_commit_hash": self._commit_hash,
-            "dolt_branch": self._dolt.active_branch,
-            "clone_dir": str(self.clone_dir),
+            "access_method": self.access_method,
+            "branch": self.branch,
             "extracted_at": datetime.utcnow().isoformat() + "Z",
         }
+        if self.access_method == "clone" and self._commit_hash:
+            meta["dolt_commit_hash"] = self._commit_hash
+            meta["clone_dir"] = str(self.clone_dir)
+        return meta
 
     def save_provenance(self, path: str | Path) -> None:
-        """Write provenance metadata to a JSON file."""
-        meta = self.get_provenance()
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
-            json.dump(meta, f, indent=2)
+            json.dump(self.get_provenance(), f, indent=2)
         logger.info("Provenance saved to %s", path)
-
-    # ──────────────────────────────────────────────
-    # Properties
-    # ──────────────────────────────────────────────
-
-    @property
-    def commit_hash(self) -> str:
-        """Current Dolt HEAD commit hash."""
-        self._ensure_connected()
-        return self._commit_hash
 
     @property
     def is_connected(self) -> bool:
-        return self._dolt is not None
+        return self.access_method == "api" or self._dolt is not None
 
-    # ──────────────────────────────────────────────
-    # Internals
-    # ──────────────────────────────────────────────
+    # Internal: query dispatch
+    def _query_api_by_date(
+        self, table: str, cols: str, symbol: str, start: str, end: str
+    ) -> pd.DataFrame:
+        """
+        API mode: DoltHub range queries exceed the server deadline on large tables.
+        Query one calendar date at a time using equality, which hits the index.
+        """
+        dates = pd.date_range(start=start, end=end, freq="D")
+        frames = []
+        owner, name = self.repo.split("/", 1)
+        url = f"{_DOLTHUB_API}/{owner}/{name}/{self.branch}"
+        for dt in dates:
+            date_str = dt.strftime("%Y-%m-%d")
+            sql = (
+                f"SELECT {cols} FROM {table} "
+                f"WHERE act_symbol = '{symbol}' AND date = '{date_str}'"
+            )
+            resp = requests.get(url, params={"q": sql}, headers=self._api_headers, timeout=60)
+            resp.raise_for_status()
+            rows = resp.json().get("rows", [])
+            if rows:
+                frames.append(pd.DataFrame(rows))
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
-    def _ensure_connected(self) -> None:
-        if self._dolt is None:
-            raise RuntimeError("DoltClient is not connected. Call .connect() first.")
+    def _query(self, sql: str, batch_size: int) -> pd.DataFrame:
+        if self.access_method == "api":
+            return self._query_api(sql, batch_size)
+        return self._query_clone(sql, batch_size)
 
+    def _query_api(self, sql: str, batch_size: int) -> pd.DataFrame:
+        """Execute paginated SQL via the DoltHub HTTP API."""
+        owner, name = self.repo.split("/", 1)
+        url = f"{_DOLTHUB_API}/{owner}/{name}/{self.branch}"
+        frames = []
+        offset = 0
+
+        while True:
+            paginated = f"{sql} LIMIT {batch_size} OFFSET {offset}"
+            resp = requests.get(url, params={"q": paginated}, headers=self._api_headers, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+
+            rows = data.get("rows", [])
+            if not rows:
+                break
+
+            frames.append(pd.DataFrame(rows))
+            if len(rows) < batch_size:
+                break
+            offset += batch_size
+
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    def _query_clone(self, sql: str, batch_size: int) -> pd.DataFrame:
+        """Execute paginated SQL against the local Dolt clone."""
+        self._ensure_clone_connected()
+        frames = []
+        offset = 0
+
+        while True:
+            paginated = f"{sql} LIMIT {batch_size} OFFSET {offset}"
+            rows = self._dolt.sql(paginated, result_format="csv")
+            if not rows:
+                break
+            frames.append(pd.DataFrame(rows))
+            if len(rows) < batch_size:
+                break
+            offset += batch_size
+
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    # Internal: dtype casting
     @staticmethod
     def _cast_option_chain_dtypes(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        doltpy returns all values as strings via csv.DictReader.
-        Cast to proper Python/pandas types.
-        """
         if df.empty:
             return df
-
-        # Dates
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["expiration"] = pd.to_datetime(df["expiration"]).dt.date
-
-        # Numerics — decimal columns come back as strings like "0.2500"
-        numeric_cols = ["strike", "bid", "ask", "vol", "delta", "gamma", "theta", "vega", "rho"]
-        for col in numeric_cols:
+        for col in ["strike", "bid", "ask", "vol", "delta", "gamma", "theta", "vega", "rho"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-
-        # call_put stays as string
         df["act_symbol"] = df["act_symbol"].astype(str).str.strip()
         df["call_put"] = df["call_put"].astype(str).str.strip()
-
         return df
 
     @staticmethod
     def _cast_vol_history_dtypes(df: pd.DataFrame) -> pd.DataFrame:
-        """Cast volatility_history string values to proper types."""
         if df.empty:
             return df
-
-        # Dates
-        date_cols = ["date", "hv_year_high_date", "hv_year_low_date",
-                     "iv_year_high_date", "iv_year_low_date"]
-        for col in date_cols:
+        for col in ["date", "hv_year_high_date", "hv_year_low_date",
+                    "iv_year_high_date", "iv_year_low_date"]:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors="coerce").dt.date
-
-        # Numerics
-        numeric_cols = [
-            "hv_current", "hv_week_ago", "hv_month_ago", "hv_year_high", "hv_year_low",
-            "iv_current", "iv_week_ago", "iv_month_ago", "iv_year_high", "iv_year_low",
-        ]
-        for col in numeric_cols:
+        for col in ["hv_current", "hv_week_ago", "hv_month_ago", "hv_year_high", "hv_year_low",
+                    "iv_current", "iv_week_ago", "iv_month_ago", "iv_year_high", "iv_year_low"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-
         df["act_symbol"] = df["act_symbol"].astype(str).str.strip()
-
         return df
 
+    def _ensure_clone_connected(self) -> None:
+        if self._dolt is None:
+            raise RuntimeError("DoltClient not connected. Call .connect() first.")
+
     def __repr__(self) -> str:
+        if self.access_method == "api":
+            return f"DoltClient(repo='{self.repo}', mode=api)"
         status = f"commit={self._commit_hash[:12]}" if self._commit_hash else "not connected"
-        return f"DoltClient(repo='{self.repo}', {status})"
+        return f"DoltClient(repo='{self.repo}', mode=clone, {status})"

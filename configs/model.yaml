@@ -16,8 +16,8 @@ surface_encoder:
   num_heads: 4                    # multi-head self-attention heads
   num_layers: 4                   # number of transformer blocks
   mlp_ratio: 4.0                  # FFN hidden dim = embed_dim x mlp_ratio
-  dropout: 0.1
-  attn_dropout: 0.1
+  dropout: 0.2
+  attn_dropout: 0.2
   pos_embed_type: learnable       # "learnable" or "sinusoidal"
 
 # ── Returns Encoder (Temporal) ──
@@ -26,7 +26,7 @@ surface_encoder:
 #   F_ret = input_dim (features per timestep)
 returns_encoder:
   backbone: gru                   # "gru", "tcn", or "transformer"
-  input_dim: 8                    # log_ret + rv_5 + rv_10 + rv_21 + jump + beta + (padding)
+  input_dim: 6                    # log_ret + rv_5 + rv_10 + rv_21 + jump + beta
   hidden_dim: 64
   num_layers: 2
   dropout: 0.2

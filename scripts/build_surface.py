@@ -13,6 +13,13 @@ from volregime.data.targets import compute_forward_rv, compute_tail_indicator, c
 from volregime.utils.io import save_tensor, save_json
 from volregime.utils.config import load_config
 
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--start-symbol", default=None,
+                    help="Resume from this symbol (skips earlier ones, rebuilds their index from disk)")
+args, _ = parser.parse_known_args()
+
 config = load_config()
 
 canonical_dir = Path(config['paths']['canonical_dir'])
@@ -36,7 +43,32 @@ unique_pairs = options[['date','act_symbol']].drop_duplicates().sort_values('dat
 sample_index = []
 skipped = {"no_returns_history": 0, "no_forward_returns": 0, "no_market_state": 0}
 
-for symbol in unique_pairs['act_symbol'].unique():
+all_symbols = list(unique_pairs['act_symbol'].unique())
+start_idx = 0
+if args.start_symbol and args.start_symbol in all_symbols:
+    start_idx = all_symbols.index(args.start_symbol)
+    # reconstruct index entries for already-processed symbols from disk
+    for sym in all_symbols[:start_idx]:
+        surf_dir = processed_dir / "surfaces" / sym
+        if not surf_dir.exists():
+            continue
+        for f in sorted(surf_dir.glob("*.pt")):
+            date_str = f.stem
+            base = f"{sym}/{date_str}"
+            sample_index.append({
+                "date": date_str,
+                "symbol": sym,
+                "surface_path": f"surfaces/{base}.pt",
+                "returns_path": f"returns/{base}.pt",
+                "vh_path": f"vol_history/{base}.pt",
+                "mkt_path": f"market_state/{base}.pt",
+                "target_path": f"targets/{base}.pt",
+                "obs_frequency": "daily",
+                "is_gap_filled": False,
+            })
+    logging.info("Reconstructed %d index entries from disk; resuming from %s", len(sample_index), args.start_symbol)
+
+for symbol in all_symbols[start_idx:]:
     symbol_pairs = unique_pairs[unique_pairs['act_symbol'] == symbol]
     symbol_underlying = underlying[underlying['symbol'] == symbol].sort_values('date')
     symbol_vol_history = vol_history[vol_history['act_symbol'] == symbol]

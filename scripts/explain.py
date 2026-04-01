@@ -21,8 +21,6 @@ Dataset paths follow the convention set by scripts/build_surfaces.py:
     data/processed/
 """
 
-from dill.pointers import parents
-from bokeh.palettes import small_palettes
 import argparse
 import json
 import logging
@@ -78,6 +76,9 @@ def parse_args():
                    help="Test samples to explain")
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--device", type=str, default="cpu")
+    p.add_argument("--explain-output", type=str, default=None,
+                   help="Output directory for explain results "
+                        "(default: <project_root>/outputs/explain)")
     return p.parse_args()
 
 def _collect_tensors(loader, key: str, n: int) -> torch.Tensor:
@@ -114,7 +115,7 @@ def main():
     device = torch.device(args.device)
 
     # dataset
-    processed_dir = root / 'data' / 'processed'
+    processed_dir = Path(cfg['paths']['processed_dir'])
     sample_index_path = processed_dir / 'sample_index.parquet'
 
     if not sample_index_path.exists():
@@ -132,7 +133,7 @@ def main():
     # use the first n_background samples as background, last n_explain as test
     dates = dataset.get_dates()
     bg_ds = dataset.get_subset(dates[0], dates[args.n_background - 1])
-    test_ds = dataset.get_subset(dates[-args.n_explain, dates[-1]])
+    test_ds = dataset.get_subset(dates[-args.n_explain], dates[-1])
 
     bg_loader = DataLoader(bg_ds, batch_size=args.batch_size, shuffle=False)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
@@ -148,7 +149,7 @@ def main():
     log.info('Loaded checkpoint: %s', ckpt_path)
 
     # output dir
-    out_dir = root / 'outputs' / 'explain'
+    out_dir = Path(args.explain_output) if args.explain_output else root / 'outputs' / 'explain'
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # baselines (mean of background set)

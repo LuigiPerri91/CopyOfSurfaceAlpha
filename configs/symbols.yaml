@@ -12,7 +12,7 @@ liquid_core:
   - SPY
   - QQQ
   - IWM
-  - DIA
+  - GS      # DIA substitute: Dow component, investment banking
   - AAPL
   - MSFT
   - AMZN
@@ -20,9 +20,9 @@ liquid_core:
   - TSLA
   - NVDA
   - META
-  - XLF
-  - XLE
-  - XLK
+  - JPM     # XLF substitute: largest US bank, financials proxy
+  - XOM     # XLE substitute: largest US energy company
+  - AVGO    # XLK substitute: semiconductors/enterprise tech
 
 # ── Phase 3: Auto-filtered medium universe ──
 # These thresholds are applied to DoltHub data to auto-select ~100-200 symbols

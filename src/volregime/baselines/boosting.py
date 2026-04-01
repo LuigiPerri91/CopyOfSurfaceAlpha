@@ -30,7 +30,7 @@ def extract_surface_features(surface_tensor: np.ndarray, n_moneyness_bins: int =
     def col_mean(col_idx):
         col = iv_masked[:, col_idx]
         valid = col[~np.isnan(col)]
-        return float(vaild.mean()) if len(valid) >0 else 0.0
+        return float(valid.mean()) if len(valid) >0 else 0.0
 
     def row_mean(row_idx):
         row = iv_masked[row_idx, :]
@@ -61,15 +61,12 @@ def build_boosting_features(surface_tensor: np.ndarray, returns_tensor: np.ndarr
     features = {}
     features.update(extract_surface_features(surface_tensor))
 
-    log_returns = returns_tensor[:,0]
-    rolling_std = float(log_returns[-21:].std()) if len(log_returns) >= 21 else 0.0
-    jump_count = int((np.abs(log_returns) > 2.5 * rolling_std).sum()) if rolling_std > 0 else 0
-
-    features['ret_rv_5d'] = log_returns.rolling(5, min_periods=1).std()
-    features['ret_rv_10d'] = log_returns.rolling(10, min_periods=1).std()
-    features['ret_rv_21d'] = log_returns.rolling(21, min_periods=1).std()
-    features['ret_trailing_21d'] = log_returns.rolling(21, min_periods=1).sum()
-    features['ret_jump_count_21d'] = float(jump_count)
+    # returns_tensor: (L, F) where columns are [log_ret, rv_5, rv_10, rv_21, jump, beta]
+    features['ret_rv_5d'] = float(returns_tensor[-1, 1])
+    features['ret_rv_10d'] = float(returns_tensor[-1, 2])
+    features['ret_rv_21d'] = float(returns_tensor[-1, 3])
+    features['ret_trailing_21d'] = float(returns_tensor[-21:, 0].sum())
+    features['ret_jump_count_21d'] = float(returns_tensor[-21:, 4].sum())
 
     vh_names = vol_history_feature_names or [
         "iv_rank", "hv_rank", "vol_risk_premium",
@@ -116,7 +113,7 @@ class BoostingBaseline:
     def predict(self, features_df: pd.DataFrame) -> np.ndarray:
         if self.model is None:
             raise RuntimeError("Call fit() first.")
-        X = np.nan_to_num(features_df.valeus.astype(np.float32),nan=0.0)
+        X = np.nan_to_num(features_df.values.astype(np.float32),nan=0.0)
         return self.model.predict(X).astype(np.float32)
 
     def get_feature_importance(self) -> dict[str, float]:

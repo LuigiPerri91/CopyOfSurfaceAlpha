@@ -27,7 +27,7 @@ from .losses import SurfaceAlphaLoss, SingleTaskLoss
 logger = logging.getLogger(__name__)
 
 class Trainer:
-    def __init__(self, cfg: dict, model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, fold_idx: int = 0, output_dir: str | None = None, model_type: str = 'full'):
+    def __init__(self, cfg: dict, model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, fold_idx: int = 0, output_dir: str | None = None, model_type: str = 'full', regime_class_weights: torch.Tensor | None = None):
         """
         Args:
             cfg:          full merged config dict from load_config()
@@ -42,8 +42,13 @@ class Trainer:
         self.model_type = model_type
         cfg_train = cfg.get('training',cfg)
 
-        # device 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # device
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        elif torch.backends.mps.is_available():
+            self.device = torch.device('mps')
+        else:
+            self.device = torch.device('cpu')
         self.model = model.to(self.device)
 
         self.train_loader = train_loader
@@ -76,7 +81,8 @@ class Trainer:
         
         # loss
         if model_type == 'full':
-            self.loss_fn = SurfaceAlphaLoss(cfg_train)
+            weights = regime_class_weights.to(self.device) if regime_class_weights is not None else None
+            self.loss_fn = SurfaceAlphaLoss(cfg_train, regime_class_weights=weights)
         else:
             self.loss_fn = SingleTaskLoss(float(cfg_train.get('huber_delta',1.0)))
 
