@@ -129,12 +129,18 @@ def build_market_state_vector(market_state_row, config_market_state):
     """
     values = []
     if config_market_state.get('vix', True):
-        values.append(float(market_state_row.get('vix',0.0)))
+        values.append(float(market_state_row.get('vix', 0.0)))
     if config_market_state.get('spy_return', True):
-        values.append(float(market_state_row.get('spy_return',0.0)))
+        values.append(float(market_state_row.get('spy_return', 0.0)))
     if config_market_state.get('risk_free_rate', False):
-        values.append(float(market_state_row.get('risk_free_rate',0.0)))
-    
+        values.append(float(market_state_row.get('risk_free_rate', 0.0)))
+    if config_market_state.get('spy_pct_from_ma200', False):
+        values.append(float(market_state_row.get('spy_pct_from_ma200', 0.0)))
+    if config_market_state.get('spy_adx14', False):
+        values.append(float(market_state_row.get('spy_adx14', 25.0)) / 100.0)  # normalize 0-100 → 0-1
+    if config_market_state.get('spy_atr_ratio', False):
+        values.append(float(market_state_row.get('spy_atr_ratio', 1.0)))
+
     return np.array(values, dtype=np.float32)
 
     

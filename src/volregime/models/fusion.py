@@ -32,7 +32,7 @@ class CrossAttentionFusion(nn.Module):
     """
     z_surf (query) cross-attends to a single kv token = concat(z_ret, z_ctx).
     """
-    def __init(self, surf_dim:int =128, ret_dim: int =64, ctx_dim: int = 32, hidden_dim: int= 128, num_heads: int =4, dropout: float = 0.1):
+    def __init__(self, surf_dim:int =128, ret_dim: int =64, ctx_dim: int = 32, hidden_dim: int= 128, num_heads: int =4, dropout: float = 0.1):
         super().__init__()
         self.q_proj = nn.Linear(surf_dim, hidden_dim)
         self.k_proj = nn.Linear(ret_dim + ctx_dim, hidden_dim)

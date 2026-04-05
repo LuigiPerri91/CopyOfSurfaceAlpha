@@ -369,10 +369,16 @@ class WalkForwardOrchestrator:
         if 'deep_ts' in enabled:
             from ..baselines.deep_ts import LSTMBaseline, GRUBaseline, TCNBaseline
             input_dim = int(train['returns_tensors'].shape[-1])
+            _dt_flags = cfg_bl.get('deep_ts_models', {})
+            _all_deep = {
+                'deep_ts_lstm': LSTMBaseline,
+                'deep_ts_gru': GRUBaseline,
+                'deep_ts_tcn': TCNBaseline,
+            }
             deep_models = {
-                'deep_ts_lstm': LSTMBaseline(input_dim=input_dim),
-                'deep_ts_gru': GRUBaseline(input_dim=input_dim),
-                'deep_ts_tcn': TCNBaseline(input_dim=input_dim),
+                name: cls(input_dim=input_dim)
+                for name, cls in _all_deep.items()
+                if _dt_flags.get(name.replace('deep_ts_', ''), True)
             }
             for col_name, model in deep_models.items():
                 try:

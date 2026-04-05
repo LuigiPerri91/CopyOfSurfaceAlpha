@@ -211,20 +211,20 @@ __marimo__/
 # ═══════════════════════════════════════════════════════════════
 
 # ── Data (too large for git) ──
-data/raw/
-data/canonical/
-data/processed/
+data/*/raw/
+data/*/canonical/
+data/*/processed/
 !data/raw/.gitkeep
 !data/canonical/.gitkeep
 !data/processed/.gitkeep
 
 # ── Model artifacts ──
-data/
 checkpoints/
 predictions/
 *.pt
 *.ckpt
 *.pth
+*.parquet
 
 # ── Experiment tracking ──
 wandb/

@@ -35,9 +35,9 @@ def save_checkpoint(model, optimizer, epoch, val_loss, path):
         "val_loss": val_loss
     },path)
 
-def load_checkpoint(path, model, optimizer=None):
+def load_checkpoint(path, model, optimizer=None, strict=True):
     ckpt = torch.load(path, weights_only=False)
-    model.load_state_dict(ckpt['model_state_dict'])
+    model.load_state_dict(ckpt['model_state_dict'], strict=strict)
     if optimizer:
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
     return ckpt['epoch'], ckpt['val_loss']

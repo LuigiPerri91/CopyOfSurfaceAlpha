@@ -56,17 +56,22 @@ class SurfaceAlphaLoss(nn.Module):
                         torch.ones_like(t))
         l_tail = F.binary_cross_entropy(outputs['tail_prob'], t, weight=w)
         l_reg = self.ce(outputs['regime_logits'], batch['target_regime'].long())
-        l_smooth = outputs['expert_preds'].var(dim=1).mean() # (B,K) -> var over K
+
+        # Load-balance loss: maximize entropy of mean routing probs so all experts are used.
+        # Replaces the old var(expert_preds) which minimized expert disagreement (caused collapse).
+        regime_probs = F.softmax(outputs['regime_logits'], dim=-1)  # (B, K)
+        mean_route = regime_probs.mean(dim=0)                        # (K,) mean prob per expert
+        l_smooth = (mean_route * torch.log(mean_route + 1e-8)).sum() # negative entropy; minimize -> uniform
 
         total = (
             self.lambda_vol * l_vol + self.lambda_tail * l_tail + self.lambda_reg * l_reg + self.lambda_smooth * l_smooth
         )
         return total, {
             "vol": l_vol.item(),
-            "tail":   l_tail.item(),
+            "tail": l_tail.item(),
             "regime": l_reg.item(),
             "smooth": l_smooth.item(),
-            "total":  total.item(),
+            "total": total.item(),
         }
 
 class SingleTaskLoss(nn.Module):

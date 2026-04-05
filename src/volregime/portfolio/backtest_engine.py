@@ -1,19 +1,21 @@
 """
-Full portfolio simulation engine.
+Full portfolio simulation engine — multi-asset.
 
 Simulates the SurfaceAlpha strategy day-by-day using:
-    - Model predictions from fold parquets
-    - RegimeIdentifier on OHLCV window
-    - PortfolioOverlay for position sizing
-    - Transaction costs per trade
+    - Model predictions from fold parquets (per date, per symbol)
+    - RegimeIdentifier on SPY OHLCV window (macro regime / ADX signals)
+    - Per-symbol PortfolioOverlay using each symbol's own rv_pred + regime_probs
+    - Equal-weight portfolio return across active symbols each day
+    - Transaction costs per trade per symbol
 
-Also simulates benchmark strategies:
-    buy_and_hold, inverse_vol, constant_vol_target
+Benchmarks:
+    buy_and_hold:   equal-weight 100% in all symbols, no rebalancing
+    inverse_vol:    per-symbol vol-targeting without model, equal-weight aggregate
 
 Outputs:
     outputs/backtest/equity_curve.csv
     outputs/backtest/position_history.csv
-    outputs/backtest/benchmarks.csv
+    outputs/backtest/benchmark_summary.json
     outputs/backtest/summary.json
 """
 import json
@@ -21,7 +23,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np 
+import numpy as np
 import pandas as pd
 
 from .regime_rules import identify_regime, REGIME_INT_TO_NAME
@@ -41,128 +43,240 @@ class BacktestResult:
 class BacktestEngine:
 
     def __init__(self, cfg: dict, output_dir: str | None = None):
-        self.cfg =cfg
+        self.cfg = cfg
         self.overlay = PortfolioOverlay(cfg)
         self.out_root = Path(output_dir or '.') / 'outputs' / 'backtest'
         self.out_root.mkdir(parents=True, exist_ok=True)
 
-        ev_cfg = cfg.get('backtest', {}).get('evaluation',{})
+        ev_cfg = cfg.get('backtest', {}).get('evaluation', {})
         self.ann_factor = int(ev_cfg.get('trading_days_per_year', 252))
         self.rfr = float(ev_cfg.get('risk_free_rate', 0.0))
+
+    def _compute_rolling_betas(
+        self, ohlcv_dict: dict[str, "pd.DataFrame"], window: int = 60
+    ) -> dict[str, "pd.Series"]:
+        """Compute rolling beta vs SPY for each symbol using log returns.
+
+        Returns {symbol: pd.Series(beta, index=ohlcv.index)}.
+        Symbols without sufficient history default to beta=1.0.
+        SPY itself returns beta=1.0 by definition.
+        """
+        if 'SPY' not in ohlcv_dict:
+            logger.warning("SPY not in ohlcv_dict — beta-weighted shorts disabled")
+            return {}
+
+        spy_ret = np.log(
+            ohlcv_dict['SPY']['close'] / ohlcv_dict['SPY']['close'].shift(1)
+        )
+        spy_var = spy_ret.rolling(window).var()
+
+        betas: dict[str, pd.Series] = {}
+        for sym, ohlcv in ohlcv_dict.items():
+            sym_ret = np.log(ohlcv['close'] / ohlcv['close'].shift(1))
+            cov = sym_ret.rolling(window).cov(spy_ret)
+            beta = (cov / spy_var.reindex(cov.index)).fillna(1.0).clip(-3.0, 5.0)
+            betas[sym] = beta
+        return betas
+
+    def _apply_beta_short(self, w_target: float, sym: str, dt, rolling_betas: dict) -> float:
+        """Scale a short weight by rolling beta; symbols below min_beta go flat.
+
+        Only called when w_target < 0 (short regime) and beta_short is enabled.
+        """
+        bs_cfg = self.cfg.get('backtest', {}).get('beta_short', {})
+        min_beta = float(bs_cfg.get('min_beta_to_short', 1.0))
+        max_mult = float(bs_cfg.get('max_beta_multiplier', 2.0))
+
+        if sym not in rolling_betas:
+            return w_target
+
+        beta_series = rolling_betas[sym]
+        loc = beta_series.index.get_indexer([dt], method='nearest')[0]
+        if loc < 0:
+            return w_target
+        beta_val = float(beta_series.iloc[loc])
+
+        if beta_val < min_beta:
+            return 0.0  # flat — counter-cyclical or low-beta name
+
+        # scale base short by beta, cap at max_mult × base
+        scaled = w_target * min(beta_val, max_mult)
+        return float(np.clip(scaled, self.overlay.w_min, 0.0))
+
+    def _calibrate_rv(self, log_rv_pred: float) -> float:
+        """Apply post-hoc MZ calibration to a log-RV prediction.
+
+        Maps raw model output to the best linear predictor of actual log-RV
+        using Mincer-Zarnowitz coefficients from backtest config. For typical
+        values (rv_pred ~ -3.0) this produces a lower vol estimate, increasing
+        overlay weights in calm regimes and reducing return drag.
+        """
+        cal = self.cfg.get('backtest', {}).get('calibration', {})
+        if not cal.get('enabled', False):
+            return log_rv_pred
+        return float(cal['intercept']) + float(cal['slope']) * log_rv_pred
 
     def run(
         self,
         predictions_df: pd.DataFrame,
-        ohlcv_df : pd.DataFrame,
+        ohlcv_dict: dict[str, pd.DataFrame],
         vix_series: pd.Series | None = None,
         initial_equity: float = 1.0,
     ) -> BacktestResult:
         """
-        Run the full backtest simulation.
+        Run the multi-asset backtest simulation.
 
         Args:
-            predictions_df: loaded from outputs/predictions/fold_*_test_preds.parquet
-                            Required columns: date, rv_pred, p_regime_0..5
-                            Optional: tail_prob
-            ohlcv_df:       OHLCV DataFrame indexed by date string or datetime
-                            Columns: open, high, low, close, volume
-                            Must cover predictions period + 250 days of warmup
-            vix_series:     VIX close values indexed by date (optional)
+            predictions_df: loaded from fold_*_test_preds.parquet
+                            Required columns: date, symbol, rv_pred, p_regime_0..5
+            ohlcv_dict:     {symbol: OHLCV DataFrame indexed by datetime}
+                            SPY must be present for macro regime signals.
+            vix_series:     VIX close values indexed by datetime (optional)
             initial_equity: starting portfolio value
         """
-        ohlcv_df = ohlcv_df.copy()
-        ohlcv_df.index = pd.to_datetime(ohlcv_df.index)
-        pred_dates = sorted(pd.to_datetime(ohlcv_df.index))
-        p_regex = [c for c in predictions_df.columns if c.startswith('p_regime_')]
+        predictions_df = predictions_df.copy()
+        predictions_df['date'] = pd.to_datetime(predictions_df['date'])
 
-        logger.info("Backtesting %d prediction dates...", len(pred_dates))
+        # macro regime signals come from SPY (or first available symbol)
+        macro_sym = 'SPY' if 'SPY' in ohlcv_dict else next(iter(ohlcv_dict))
+        macro_ohlcv = ohlcv_dict[macro_sym]
 
-        # simulation loop
-        equity, w_prev = initial_equity, 0.0
+        symbols = sorted(ohlcv_dict.keys())
+        pred_dates = sorted(predictions_df['date'].unique())
+        logger.info("Multi-asset backtest: %d symbols, %d prediction dates",
+                    len(symbols), len(pred_dates))
+
+        # precompute rolling betas for beta-weighted short sizing
+        bs_cfg = self.cfg.get('backtest', {}).get('beta_short', {})
+        beta_window = int(bs_cfg.get('window', 60))
+        rolling_betas = (
+            self._compute_rolling_betas(ohlcv_dict, window=beta_window)
+            if bs_cfg.get('enabled', False) else {}
+        )
+
+        equity = initial_equity
+        w_prev = {sym: 0.0 for sym in symbols}   # per-symbol previous weight
         eq_records, pos_records = [], []
 
         for dt in pred_dates:
-            row = predictions_df[pd.to_datetime(predictions_df['date']) == dt]
-            if len(row) == 0:
-                continue
-            row = row.iloc[0]
-
-            # OHLCV window for regime identification
-            loc = ohlcv_df.index.get_indexer([dt], method='nearest')[0]
-            if loc < 250:
-                # not enough history for 200-day MA
-                eq_records.append({
-                    'date': dt, 'equity': equity, 'weight': 0.0,
-                    'strategy_ret': 0.0, 'cost': 0.0, 'drawdown': 0.0
-                })
+            date_preds = predictions_df[predictions_df['date'] == dt]
+            if len(date_preds) == 0:
                 continue
 
-            win = ohlcv_df.iloc[max(0, loc- 250): loc+1]
-            h = win['high'].values
-            l = win['low'].values
-            c = win['close'].values
+            # macro signals for ADX override (SPY window)
+            loc_macro = macro_ohlcv.index.get_indexer([dt], method='nearest')[0]
+            signals = None
+            if loc_macro >= 250:
+                win = macro_ohlcv.iloc[max(0, loc_macro - 250): loc_macro + 1]
+                vix_win = None
+                if vix_series is not None:
+                    try:
+                        vix_win = vix_series.reindex(win.index, method='nearest').values
+                    except Exception:
+                        pass
+                _, signals = identify_regime(
+                    win['high'].values, win['low'].values, win['close'].values,
+                    self.cfg, vix=vix_win,
+                )
 
-            vix_win = None
-            if vix_series is not None:
-                try:
-                    vix_win = vix_series.reindex(win.index, method='nearest').values
-                except Exception:
-                    pass
+            # per-symbol overlay
+            sym_strategy_rets, sym_weights, sym_underlying_rets = {}, {}, {}
 
-            _, signals = identify_regime(h, l, c, self.cfg, vix=vix_win)
+            for _, pred_row in date_preds.iterrows():
+                sym = pred_row['symbol']
+                if sym not in ohlcv_dict:
+                    continue
+                sym_ohlcv = ohlcv_dict[sym]
+                loc = sym_ohlcv.index.get_indexer([dt], method='nearest')[0]
+                if loc + 1 >= len(sym_ohlcv):
+                    continue
 
-            # model regime probs
-            regime_probs = np.array(
-                [float(row.get(f'p_regime_{k}', 1/6)) for k in range(6)],
-                dtype=np.float32
-            )
-            regime_probs /= regime_probs.sum()
+                regime_probs = np.array(
+                    [float(pred_row.get(f'p_regime_{k}', 1 / 6)) for k in range(6)],
+                    dtype=np.float32,
+                )
+                regime_probs /= regime_probs.sum()
 
-            overlay_out = self.overlay.compute(
-                log_rv_pred= float(row['rv_pred']),
-                regime_probs= regime_probs,
-                signals= signals,
-            )
-            w_target = overlay_out['weight']
+                macro_regime = signals['regime_name'] if signals else None
+                overlay_out = self.overlay.compute(
+                    log_rv_pred=self._calibrate_rv(float(pred_row['rv_pred'])),
+                    regime_probs=regime_probs,
+                    signals=signals,
+                    macro_regime_name=macro_regime,
+                )
+                w_target = overlay_out['weight']
 
-            # skip rebalance if change is below threshold
-            if not self.overlay.should_rebalance(w_prev, w_target):
-                w_target = w_prev
+                # beta-weighted short: scale per-symbol when in a short regime
+                if w_target < 0 and rolling_betas:
+                    w_target = self._apply_beta_short(w_target, sym, dt, rolling_betas)
 
-            # transaction cost
-            cost = self.overlay.transaction_cost(w_prev, w_target)
+                if not self.overlay.should_rebalance(w_prev[sym], w_target):
+                    w_target = w_prev[sym]
 
-            # daily return: position set at today's close, return next day
-            if loc + 1 < len(ohlcv_df):
+                cost = self.overlay.transaction_cost(w_prev[sym], w_target)
                 next_ret = float(np.log(
-                    ohlcv_df['close'].iloc[loc+1] / ohlcv_df['close'].iloc[loc]
+                    sym_ohlcv['close'].iloc[loc + 1] / sym_ohlcv['close'].iloc[loc]
                 ))
-            else:
-                next_ret = 0.0
+                strategy_ret = w_prev[sym] * next_ret - cost
 
-            strategy_ret = w_prev * next_ret - cost
-            equity *= (1.0 + strategy_ret)
-            w_prev = w_target
+                sym_strategy_rets[sym] = strategy_ret
+                sym_underlying_rets[sym] = next_ret
+                sym_weights[sym] = w_target
+                w_prev[sym] = w_target
+
+            if not sym_strategy_rets:
+                continue
+
+            # equal-weight portfolio aggregation
+            portfolio_ret = float(np.mean(list(sym_strategy_rets.values())))
+            avg_weight = float(np.mean(list(sym_weights.values())))
+            avg_undl_ret = float(np.mean(list(sym_underlying_rets.values())))
+            equity *= (1.0 + portfolio_ret)
+
+            regime_name = signals['regime_name'] if signals else 'unknown'
+            p_crisis = float(np.mean([
+                self.overlay.compute(
+                    self._calibrate_rv(float(r['rv_pred'])),
+                    np.array([float(r.get(f'p_regime_{k}', 1/6)) for k in range(6)], dtype=np.float32),
+                )['p_crisis']
+                for _, r in date_preds[date_preds['symbol'].isin(sym_strategy_rets)].iterrows()
+            ]))
+            sigma_hat = float(np.mean([
+                self.overlay.compute(
+                    self._calibrate_rv(float(r['rv_pred'])),
+                    np.array([float(r.get(f'p_regime_{k}', 1/6)) for k in range(6)], dtype=np.float32),
+                )['sigma_hat_ann']
+                for _, r in date_preds[date_preds['symbol'].isin(sym_strategy_rets)].iterrows()
+            ]))
 
             eq_records.append({
-                "date": dt,
-                "equity": equity,
-                "weight": w_target,
-                "underlying_ret": next_ret,
-                "strategy_ret": strategy_ret,
-                "cost": cost,
-                "drawdown": 0.0,
-                "regime_name": signals["regime_name"],
-                "sigma_hat": overlay_out["sigma_hat_ann"],
-                "p_crisis": overlay_out["p_crisis"],
+                'date': dt,
+                'equity': equity,
+                'weight': avg_weight,
+                'underlying_ret': avg_undl_ret,
+                'strategy_ret': portfolio_ret,
+                'cost': float(np.mean([
+                    self.overlay.transaction_cost(0.0, w) for w in sym_weights.values()
+                ])),
+                'drawdown': 0.0,
+                'regime_name': regime_name,
+                'sigma_hat': sigma_hat,
+                'p_crisis': p_crisis,
+                'n_symbols': len(sym_strategy_rets),
             })
-            pos_records.append({**overlay_out, 'date':dt, **signals})
+            pos_records.append({
+                'date': dt,
+                'regime_name': regime_name,
+                'n_symbols': len(sym_strategy_rets),
+                **{f'w_{sym}': sym_weights.get(sym, float('nan')) for sym in symbols},
+                **{f'ret_{sym}': sym_underlying_rets.get(sym, float('nan')) for sym in symbols},
+            })
 
         ec_df = pd.DataFrame(eq_records).set_index('date')
         pos_df = pd.DataFrame(pos_records)
 
         if len(ec_df) == 0:
-            logger.warning("No backtest records - check prediction dates vs OHLCV range.")
+            logger.warning("No backtest records — check prediction dates vs OHLCV range.")
             return BacktestResult(ec_df, pos_df, {}, {}, {})
 
         # drawdown
@@ -171,16 +285,16 @@ class BacktestEngine:
 
         # strategy summary
         summary = compute_economic_metrics(
-            returns = ec_df['strategy_ret'].values,
-            equity = ec_df['equity'].values,
-            weights = ec_df['weight'].values,
-            sigma_hat = ec_df['sigma_hat'].values,
-            sigma_target= self.overlay.sigma_target,
-            risk_free_rate= self.rfr,
-            ann_factor= self.ann_factor,
+            returns=ec_df['strategy_ret'].values,
+            equity=ec_df['equity'].values,
+            weights=ec_df['weight'].values,
+            sigma_hat=ec_df['sigma_hat'].values,
+            sigma_target=self.overlay.sigma_target,
+            risk_free_rate=self.rfr,
+            ann_factor=self.ann_factor,
         )
 
-        # per regime performance
+        # per-regime performance
         regime_summary = {}
         for rname in REGIME_INT_TO_NAME.values():
             mask = ec_df['regime_name'] == rname
@@ -191,17 +305,13 @@ class BacktestEngine:
             from ..evaluation.economic_metrics import sharpe_ratio
             regime_summary[rname] = {
                 'n': int(mask.sum()),
-                'sharpe': round(sharpe_ratio(subset.values, self.rfr, self.ann_factor),3),
-                'avg_weight': round(float(ec_df[mask]['weight'].mean()), 4)
+                'sharpe': round(sharpe_ratio(subset.values, self.rfr, self.ann_factor), 3),
+                'avg_weight': round(float(ec_df[mask]['weight'].mean()), 4),
             }
         summary['per_regime'] = regime_summary
 
-        # benchmarks
-        # get underlying returns aligned with backtest dates
-        undl_idx = ohlcv_df.index.get_indexer(ec_df.index, method='nearest')
-        undl_rets = np.array([
-            float(np.log(ohlcv_df['close'].iloc[i+1] / ohlcv_df['close'].iloc[i])) if i + 1 < len(ohlcv_df) else 0.0 for i in undl_idx
-        ])
+        # equal-weight benchmark returns (average underlying return across all symbols each day)
+        undl_rets = ec_df['underlying_ret'].values
         bmark = compute_benchmark_metrics(undl_rets, self.overlay.sigma_target, self.rfr, self.ann_factor)
 
         # save
@@ -214,16 +324,16 @@ class BacktestEngine:
             json.dump(bmark, f, indent=2, default=str)
 
         logger.info(
-            "Backtest done | Sharpe=%.2f | MaxDD=%.1f%% | AnnReturn=%.1f%% | Turnover=%.1f",
-            summary.get("sharpe", float("nan")),
-            summary.get("max_drawdown_pct", float("nan")),
-            summary.get("ann_return_pct", float("nan")),
-            summary.get("turnover_ann", float("nan")),
+            "Backtest done | Sharpe=%.3f | MaxDD=%.1f%% | AnnReturn=%.1f%% | Symbols=%d",
+            summary.get('sharpe', float('nan')),
+            summary.get('max_drawdown_pct', float('nan')),
+            summary.get('ann_return_pct', float('nan')),
+            len(symbols),
         )
         return BacktestResult(
-            equity_curve = ec_df,
-            position_history = pos_df,
-            benchmarks = bmark,
-            summary = summary,
-            benchmark_summary = bmark,
+            equity_curve=ec_df,
+            position_history=pos_df,
+            benchmarks=bmark,
+            summary=summary,
+            benchmark_summary=bmark,
         )

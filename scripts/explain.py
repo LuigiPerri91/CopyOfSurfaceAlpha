@@ -106,7 +106,7 @@ def _collect_context(loader, n: int) -> np.ndarray:
         total += ctx.shape[0]
         if total >= n:
             break
-    return np.concatenate(parts, axis=0)[:n]
+    return np.nan_to_num(np.concatenate(parts, axis=0)[:n], nan=0.0)
 
 def main():
     args = parse_args()
@@ -145,7 +145,7 @@ def main():
     ckpt_path = args.checkpoint or str(
         root / 'outputs' / 'checkpoints' / f'fold_{args.fold}' / 'best.pt'
     )
-    load_checkpoint(ckpt_path, model)
+    load_checkpoint(ckpt_path, model, strict=False)
     log.info('Loaded checkpoint: %s', ckpt_path)
 
     # output dir

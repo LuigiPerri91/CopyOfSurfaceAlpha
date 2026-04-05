@@ -1,27 +1,28 @@
-# ╔══════════════════════════════════════════════════════════════╗
-# ║  SurfaceAlpha — Makefile                                    ║
-# ║  Run the full pipeline with short commands                  ║
-# ╚══════════════════════════════════════════════════════════════╝
+# SurfaceAlpha — Makefile
+# Run the full pipeline with short commands
 
 .DEFAULT_GOAL := help
 PYTHON  := python
 SCRIPTS := scripts
 
-# ── Per-core directory roots ────────────────────────────────────
+# Per-core directory roots
 PILOT_DATA  := ./data/pilot
 PILOT_OUT   := ./runs/pilot
-LIQUID_DATA := ./data/liquid_core
-LIQUID_OUT  := ./runs/liquid_core
+LIQUID_DATA   := ./data/liquid_core
+LIQUID_OUT    := ./runs/liquid_core_v4
+LIQUID_OUT_V5 := ./runs/liquid_core_v5
+LIQUID_OUT_V1 := ./runs/liquid_core_v1
+LIQUID_OUT_V3 := ./runs/liquid_core_v3
 
-# ── Full per-core pipelines ────────────────────────────────────
+# Full per-core pipelines
 
 .PHONY: run-pilot
 run-pilot: data-pilot train-pilot evaluate-pilot backtest-pilot explain-pilot ## Full pipeline for pilot core
 
 .PHONY: run-liquid
-run-liquid: data-liquid train-liquid evaluate-liquid backtest-liquid explain-liquid ## Full pipeline for liquid_core
+run-liquid: data-liquid train-liquid evaluate-liquid backtest-liquid diagnose-liquid explain-liquid ## Full pipeline for liquid_core
 
-# ── Data Pipeline ──────────────────────────────────────────────
+# Data Pipeline
 
 .PHONY: fetch-options
 fetch-options:  ## Fetch option_chain + volatility_history from DoltHub
@@ -65,7 +66,14 @@ data-liquid:  ## Full data pipeline for liquid_core → data/liquid_core/
 	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) $(PYTHON) $(SCRIPTS)/build_canonical.py
 	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) $(PYTHON) $(SCRIPTS)/build_surface.py
 
-# ── Training ───────────────────────────────────────────────────
+.PHONY: prep-liquid-v5
+prep-liquid-v5:  ## Rebuild market state tensors only for V5 (skips options/underlying/surfaces/targets)
+	rm -f $(LIQUID_DATA)/raw/market_state.parquet $(LIQUID_DATA)/raw/fetch_market_meta.json
+	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) $(PYTHON) $(SCRIPTS)/fetch_market_state.py
+	cp $(LIQUID_DATA)/raw/market_state.parquet $(LIQUID_DATA)/canonical/market_state_canonical.parquet
+	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) $(PYTHON) $(SCRIPTS)/rebuild_market_state_tensors.py
+
+# Training
 
 .PHONY: train
 train:  ## Train all models (baselines + multimodal) via walk-forward
@@ -80,6 +88,11 @@ train-pilot:  ## Train pilot core (SPY only) → runs/pilot/
 train-liquid:  ## Train liquid_core → runs/liquid_core/
 	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) \
 	$(PYTHON) $(SCRIPTS)/train.py --output $(LIQUID_OUT)
+
+.PHONY: train-liquid-v5
+train-liquid-v5:  ## Train liquid_core V5 → runs/liquid_core_v5/
+	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) \
+	$(PYTHON) $(SCRIPTS)/train.py --output $(LIQUID_OUT_V5)
 
 .PHONY: evaluate
 evaluate:  ## Evaluate trained models: forecast + economic metrics
@@ -97,7 +110,13 @@ evaluate-liquid:  ## Evaluate liquid_core run
 		--predictions-dir $(LIQUID_OUT)/outputs/predictions \
 		--output-dir $(LIQUID_OUT)/outputs/evaluation
 
-# ── Backtesting ────────────────────────────────────────────────
+.PHONY: evaluate-liquid-v5
+evaluate-liquid-v5:  ## Evaluate liquid_core V5 run
+	$(PYTHON) $(SCRIPTS)/evaluate.py \
+		--predictions-dir $(LIQUID_OUT_V5)/outputs/predictions \
+		--output-dir $(LIQUID_OUT_V5)/outputs/evaluation
+
+# Backtesting
 
 .PHONY: backtest
 backtest:  ## Run portfolio overlay backtest
@@ -117,7 +136,14 @@ backtest-liquid:  ## Backtest liquid_core
 		--predictions-dir $(LIQUID_OUT)/outputs/predictions \
 		--output $(LIQUID_OUT)
 
-# ── Explainability ─────────────────────────────────────────────
+.PHONY: backtest-liquid-v5
+backtest-liquid-v5:  ## Backtest liquid_core V5
+	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) \
+	$(PYTHON) $(SCRIPTS)/backtest.py \
+		--predictions-dir $(LIQUID_OUT_V5)/outputs/predictions \
+		--output $(LIQUID_OUT_V5)
+
+# Explainability
 
 .PHONY: explain
 explain:  ## Generate SHAP values, ViT attributions, regime importance
@@ -137,12 +163,21 @@ explain-liquid:  ## Explain liquid_core model (fold 0)
 		--checkpoint $(LIQUID_OUT)/outputs/checkpoints/fold_0/best.pt \
 		--explain-output $(LIQUID_OUT)/outputs/explain
 
-# ── Full Pipeline ──────────────────────────────────────────────
+.PHONY: diagnose-liquid
+diagnose-liquid:  ## Run diagnostics: MoE diversity, bull_quiet, fold stability
+	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) \
+	$(PYTHON) $(SCRIPTS)/diagnose.py \
+		--predictions-dir $(LIQUID_OUT)/outputs/predictions \
+		--equity-curve $(LIQUID_OUT)/outputs/backtest/equity_curve.csv \
+		--run-dir $(LIQUID_OUT)/outputs \
+		--output $(LIQUID_OUT)/outputs/diagnostics
+
+# Full Pipeline
 
 .PHONY: all
 all: data train evaluate backtest explain  ## Run everything end-to-end
 
-# ── Development ────────────────────────────────────────────────
+# Development
 
 .PHONY: install
 install:  ## Install package in editable mode with dev dependencies
@@ -196,7 +231,7 @@ clean:  ## Remove build artifacts and caches
 	find . -type d -name .mypy_cache -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -exec rm -rf {} + 2>/dev/null || true
 
-# ── Help ───────────────────────────────────────────────────────
+# Help
 
 .PHONY: help
 help:  ## Show this help message

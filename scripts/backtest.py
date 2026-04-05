@@ -27,8 +27,6 @@ from volregime.portfolio.backtest_engine import BacktestEngine
 def main():
     parser = argparse.ArgumentParser(description="SurfaceAlpha backtest")
     parser.add_argument("--predictions-dir", default=None)
-    parser.add_argument("--ohlcv",  default=None,
-                        help="Path to underlying OHLCV parquet (e.g. data/raw/underlying/SPY.parquet)")
     parser.add_argument("--vix",    default=None,
                         help="Path to VIX parquet (e.g. data/raw/underlying/^VIX.parquet)")
     parser.add_argument("--output", default=None)
@@ -56,23 +54,43 @@ def main():
     preds_df = pd.concat([pd.read_parquet(f) for f in pred_files], ignore_index=True)
     logger.info('Loaded %d prediction rows for %d folds', len(preds_df), len(pred_files))
 
-    # load OHLCV
+    # load OHLCV for all active symbols
     raw_dir = Path(cfg['paths']['raw_dir'])
-    active_sym = cfg.get('active_symbols_list', ['SPY'])[0] # use first symbol
+    active_symbols = cfg.get('active_symbols_list', ['SPY'])
 
-    ohlcv_path = args.ohlcv or raw_dir / 'underlying' / f'{active_sym}.parquet'
-    if not Path(ohlcv_path).exists():
-        logger.error("OHLCV file not found: %s", ohlcv_path)
+    def _load_ohlcv(path: Path) -> pd.DataFrame:
+        df = pd.read_parquet(path)
+        if 'date' in df.columns:
+            df = df.set_index('date')
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index)
+        return df.sort_index()
+
+    ohlcv_dict: dict[str, pd.DataFrame] = {}
+    for sym in active_symbols:
+        sym_path = raw_dir / 'underlying' / f'{sym}.parquet'
+        if sym_path.exists():
+            ohlcv_dict[sym] = _load_ohlcv(sym_path)
+            logger.info("OHLCV loaded: %-6s  %d rows, %s -> %s",
+                        sym, len(ohlcv_dict[sym]),
+                        ohlcv_dict[sym].index[0].date(), ohlcv_dict[sym].index[-1].date())
+        else:
+            logger.warning("OHLCV not found for %s at %s — skipping", sym, sym_path)
+
+    # ensure SPY is present for macro regime signals
+    if 'SPY' not in ohlcv_dict:
+        spy_path = raw_dir / 'underlying' / 'SPY.parquet'
+        if spy_path.exists():
+            ohlcv_dict['SPY'] = _load_ohlcv(spy_path)
+            logger.info("SPY loaded separately for macro regime signals")
+        else:
+            logger.warning("SPY OHLCV not found; macro regime signals will be unavailable")
+
+    if not ohlcv_dict:
+        logger.error("No OHLCV files loaded — check raw_dir: %s", raw_dir)
         sys.exit(1)
-    
-    ohlcv_df = pd.read_parquet(ohlcv_path)
-    # ensure index is a DatetimeIndex — parquet may store dates as a column
-    if 'date' in ohlcv_df.columns:
-        ohlcv_df = ohlcv_df.set_index('date')
-    if not isinstance(ohlcv_df.index, pd.DatetimeIndex):
-        ohlcv_df.index = pd.to_datetime(ohlcv_df.index)
-    ohlcv_df = ohlcv_df.sort_index()
-    logger.info("OHLCV: %d rows, %s -> %s", len(ohlcv_df), ohlcv_df.index[0].date(), ohlcv_df.index[-1].date())
+
+    logger.info("Loaded OHLCV for %d symbols: %s", len(ohlcv_dict), sorted(ohlcv_dict))
 
     # load vix (optional)
     vix_series = None
@@ -88,7 +106,7 @@ def main():
     # run backtest
     output_dir = args.output or str(project_root)
     engine = BacktestEngine(cfg, output_dir=output_dir)
-    result = engine.run(preds_df, ohlcv_df, vix_series)
+    result = engine.run(preds_df, ohlcv_dict, vix_series)
 
     # print summary
     s = result.summary
@@ -101,6 +119,25 @@ def main():
     logger.info("  Calmar:         %.3f", s.get("calmar", float("nan")))
     logger.info("  Turnover (ann): %.1f", s.get("turnover_ann", float("nan")))
     logger.info("  Total Return:   %.2f%%", s.get("total_return_pct", float("nan")))
+
+    bs = result.benchmark_summary
+    if bs:
+        logger.info("\n── Benchmark Comparison ───────────────────────────────────────")
+        header = f"  {'strategy':<25}  {'AnnRet%':>8}  {'Sharpe':>8}  {'MaxDD%':>8}  {'Calmar':>8}"
+        logger.info(header)
+        logger.info("  " + "-" * (len(header) - 2))
+        logger.info("  %-25s  %8.2f  %8.3f  %8.2f  %8.3f", "surfacealpha",
+                    s.get("ann_return_pct", float("nan")),
+                    s.get("sharpe", float("nan")),
+                    s.get("max_drawdown_pct", float("nan")),
+                    s.get("calmar", float("nan")))
+        for bname, bm in bs.items():
+            logger.info("  %-25s  %8.2f  %8.3f  %8.2f  %8.3f", bname,
+                        bm.get("ann_return_pct", float("nan")),
+                        bm.get("sharpe", float("nan")),
+                        bm.get("max_drawdown_pct", float("nan")),
+                        bm.get("calmar", float("nan")))
+
     logger.info("Outputs saved to %s", output_dir)
 
 if __name__ == "__main__":

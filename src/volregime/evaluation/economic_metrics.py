@@ -60,13 +60,15 @@ def turnover(weights: np.ndarray, ann_factor: int =252) -> float:
     dw = np.abs(np.diff(np.asarray(weights, dtype=np.float64)))
     return float(dw.mean() * ann_factor)
 
-def vol_target_tracking(sigma_hat: np.ndarray, sigma_target: float) -> float:
+def vol_target_tracking(returns: np.ndarray, sigma_target: float, ann_factor: int = 252) -> float:
     """
-    Fraction of dates where the model's sigma_hat is within 50% of sigma_target.
-    Measures whether the vol-targeting logic actually controls realised vol.
+    Ratio of realised annualised portfolio vol to sigma_target.
+    Values near 1.0 mean the strategy is running at the intended risk level.
+    Values < 1 mean under-invested; > 1 means over-invested.
     """
-    sh = np.asarray(sigma_hat)
-    return float(((sh > sigma_target*0.5) & (sh < sigma_target * 1.5)).mean())
+    r = np.asarray(returns, dtype=np.float64)
+    realised_vol = float(r.std() * np.sqrt(ann_factor))
+    return round(realised_vol / sigma_target, 4)
 
 # combined metrics
 
@@ -119,10 +121,9 @@ def compute_economic_metrics(
         metrics['avg_weight'] = round(float(w.mean()), 4)
         metrics['weight_std'] = round(float(w.std()), 4)
 
-    if sigma_hat is not None:
-        metrics['vol_target_tracking'] = round(
-            vol_target_tracking(sigma_hat, sigma_target), 4
-        )
+    metrics['vol_target_tracking'] = round(
+        vol_target_tracking(r, sigma_target, ann_factor), 4
+    )
     
     return metrics
 

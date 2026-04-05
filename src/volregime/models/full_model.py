@@ -58,11 +58,14 @@ class SurfaceAlphaModel(nn.Module):
         ret_dim = ret_cfg.get('hidden_dim', 64)
 
         self.context_encoder = ContextEncoder(
-            input_dim=ctx_cfg.get("input_dim", 14),
-            hidden_dims=ctx_cfg.get("hidden_dims", [64, 32]),
+            vol_history_dim=ctx_cfg.get("vol_history_dim", 11),
+            macro_dim=ctx_cfg.get("macro_dim", 3),
+            vol_hidden_dim=ctx_cfg.get("vol_hidden_dim", 64),
+            macro_hidden_dim=ctx_cfg.get("macro_hidden_dim", 16),
+            output_dim=ctx_cfg.get("output_dim", 32),
             dropout=ctx_cfg.get("dropout", 0.2),
         )
-        ctx_dim = ctx_cfg.get('hidden_dims',[64,32])[-1]
+        ctx_dim = self.context_encoder.output_dim
 
         # fusion
         self.fusion = build_fusion(mcfg, surf_dim=surf_dim, ret_dim=ret_dim, ctx_dim=ctx_dim)

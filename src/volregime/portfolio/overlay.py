@@ -9,6 +9,7 @@ Strategy logic (per backtest.yaml / PDR):
     4. ADX override:   if ADX < 20 (no trend): w = w * (1 - size_reduction)
     5. Confidence:     w = w / (1 + ensemble_std)   [Phase 7, disabled by default]
     6. Clip:           w = clip(w, w_min, w_max)
+    7. VIX breaker:    if VIX >= threshold → w = 0.0  (circuit breaker, applied last)
 
 Config keys (cfg["backtest"]):
     vol_targeting.sigma_target / w_max / w_min
@@ -16,6 +17,7 @@ Config keys (cfg["backtest"]):
     regime_rules.{name}.position_size
     adx_override.enabled / adx_threshold / size_reduction
     confidence_scaling.enabled
+    vix_circuit_breaker.enabled / threshold
     costs.transaction_cost_bps / slippage_bps
     rebalance.min_trade_threshold
 """
@@ -47,12 +49,17 @@ class PortfolioOverlay:
         costs = bt_cfg.get('costs',{})
         self.cost_bps = (float(costs.get('transaction_cost_bps', 5)) + float(costs.get('slippage_bps',2)))/ 10_000
 
+        vix_cb = bt_cfg.get('vix_circuit_breaker', {})
+        self.vix_cb_enabled = bool(vix_cb.get('enabled', False))
+        self.vix_cb_threshold = float(vix_cb.get('threshold', 40.0))
+
     def compute(
         self,
         log_rv_pred: float,
         regime_probs: np.ndarray,
         signals: dict | None = None,
         ensemble_std: float | None = None,
+        macro_regime_name: str | None = None,
     ) -> dict:
         """
         Compute the target position size for a single date.
@@ -73,14 +80,23 @@ class PortfolioOverlay:
         sigma_hat = rv_21d * np.sqrt(252.0 / 21.0)
         sigma_hat = np.maximum(sigma_hat, 1e-4)
 
-        # vol targeting
-        w = self.sigma_target / sigma_hat
-
-        # regime sizing
+        # regime sizing — prefer SPY macro regime (rule-based) if provided;
+        # fall back to model argmax so standalone calls still work
         regime_idx = int(np.argmax(regime_probs))
-        regime_name = REGIME_INT_TO_NAME.get(regime_idx, "bull_quiet")
+        regime_name = macro_regime_name if macro_regime_name else REGIME_INT_TO_NAME.get(regime_idx, "bull_quiet")
         regime_size = self.rules.get_position_size(regime_name)
-        w *= regime_size
+
+        if regime_size < 0:
+            # Short regime: bypass vol targeting entirely.
+            # Vol targeting is wrong-direction for shorts — high vol produces a tiny
+            # vol-target weight which when multiplied by a negative size gives a tiny
+            # short, but high-vol bear is exactly when you want maximum short exposure.
+            # Use the fixed short size from regime_rules directly.
+            w = float(regime_size)
+        else:
+            # Long regime: vol targeting then regime sizing
+            w = self.sigma_target / sigma_hat
+            w *= regime_size
 
         # crisis gating
         p_crisis = 0.0
@@ -104,6 +120,14 @@ class PortfolioOverlay:
         # clip
         weight = float(np.clip(w, self.w_min, self.w_max))
 
+        # VIX circuit breaker — applied last, overrides everything
+        vix_breaker_fired = False
+        if self.vix_cb_enabled and signals is not None:
+            current_vix = float(signals.get('vix', 0.0))
+            if current_vix >= self.vix_cb_threshold:
+                weight = 0.0
+                vix_breaker_fired = True
+
         return {
             "weight": weight,
             "w_pre_clip": float(w),
@@ -115,6 +139,7 @@ class PortfolioOverlay:
             "p_crisis": p_crisis,
             "adx_override": adx_override_applied,
             "confidence_scaling": conf_applied,
+            "vix_breaker": vix_breaker_fired,
         }
 
     def compute_batch(
