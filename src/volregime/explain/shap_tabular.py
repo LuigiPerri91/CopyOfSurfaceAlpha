@@ -90,6 +90,7 @@ class _ContextWrapper(nn.Module):
             (B,) scalar output
         """
         B = context.shape[0]
+        context = torch.nan_to_num(context, nan=0.0)  # NaN features → 0 to prevent gradient blowup
         vol_history = context[:, : self.vh_dim]
         market_state = context[:, self.vh_dim: ]
         surface = self.surface_baseline.expand(B, -1, -1, -1)

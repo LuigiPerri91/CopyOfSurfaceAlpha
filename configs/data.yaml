@@ -94,7 +94,10 @@ vol_history:
 market_state:
   vix: true                       # ^VIX daily close
   spy_return: true                # SPY daily log return
-  risk_free_rate: true           # 3-month T-bill (optional, from FRED)
+  risk_free_rate: true            # 3-month T-bill (^IRX)
+  spy_pct_from_ma200: true        # (close - MA200) / MA200 — trend direction signal
+  spy_adx14: true                 # ADX(14) — trend strength signal
+  spy_atr_ratio: true             # ATR(10) / ATR(50) — volatility regime signal
 
 # ── Forward targets ──
 targets:

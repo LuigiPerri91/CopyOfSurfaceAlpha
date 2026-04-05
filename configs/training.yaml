@@ -7,7 +7,7 @@
 optimizer:
   name: adamw
   learning_rate: 0.0003
-  weight_decay: 0.01
+  weight_decay: 0.03
   betas: [0.9, 0.999]
   eps: 0.00000001
 
@@ -31,7 +31,7 @@ gradient_clip_norm: 1.0
 # ── Early stopping ──
 early_stopping:
   enabled: true
-  patience: 100                   # epochs without val improvement
+  patience: 50                   # epochs without val improvement
   monitor: val_loss
   min_delta: 0.0001               # minimum change to count as improvement
 
@@ -40,15 +40,15 @@ early_stopping:
 loss_weights:
   lambda_vol: 1.0                 # Huber on log(RV) — primary objective
   lambda_tail: 0.1                # BCE for tail-risk
-  lambda_reg: 0.15                # CE for regime classification
-  lambda_smooth: 0.05             # surface regularization
+  lambda_reg: 0.30                # CE for regime classification (doubled for V5 sideways accuracy)
+  lambda_smooth: 0.1              # MoE load-balance: entropy of mean routing (encourages all experts to be used)
 
 # ── Huber loss ──
 huber_delta: 0.5
 
 # ── Walk-forward cross-validation ──
 walk_forward:
-  num_folds: 8                      # ~2 yr worth of quarterly test folds across 7 yr range
+  num_folds: 28                     # ~7 yr of quarterly test folds (2018-Q2 → 2025-Q1)
   train_window_days: 756            # ~3 years (expanding from this base)
   val_window_days: 63               # ~3 months
   test_window_days: 63              # ~3 months
@@ -69,6 +69,10 @@ baselines:
   har_rv: true
   boosting: true
   deep_ts: true
+  deep_ts_models:
+    lstm: true
+    gru: false    # redundant with LSTM; skip to save ~12h per run
+    tcn: false    # redundant with LSTM; skip to save ~12h per run
   # Residual learning: train deep model on y_res = y - y_base
   residual_learning:
     enabled: true

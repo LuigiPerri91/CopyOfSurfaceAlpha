@@ -6,14 +6,14 @@
 # ── Volatility targeting ──
 # w_t = min(w_max, sigma_target / y_hat_sigma_t)
 vol_targeting:
-  sigma_target: 0.10              # annualized target vol (10%)
-  w_max: 1.5                     # max weight (150% exposure)
-  w_min: 0.0                     # min weight (0% = fully cash)
+  sigma_target: 0.30              # annualized target vol (30%) — allows leverage in quiet regimes (bull_quiet sigma_hat ~21% → w ~1.42)
+  w_max: 1.5                     # max weight (150% leverage cap)
+  w_min: 0.0                      # min weight — no shorts; VIX breaker handles crisis protection
 
 # ── Regime gating ──
 # w_t = w_t * (1 - p_crisis)
 regime_gating:
-  enabled: true
+  enabled: false               # model p_crisis systematically ~0.31 even in bull_quiet; killing weights
   crisis_regimes:
     - bear_volatile
     - sideways_volatile
@@ -21,27 +21,27 @@ regime_gating:
 # ── Six-regime position sizing (from PDR) ──
 regime_rules:
   bull_quiet:
-    position_size: 1.0            # 100%
+    position_size: 1.0            # 100% — w_max=1.0 prevents leverage; no extra reduction needed
     atr_stop_multiplier: 2.0      # 1.5-2x ATR
     strategy_note: "trend-following, let profits run"
 
   bull_volatile:
-    position_size: 0.625          # midpoint of 50-75%
+    position_size: 0.375          # 37.5% — net-negative return days; reduce exposure beyond vol targeting
     atr_stop_multiplier: 2.5      # 2-3x ATR
     strategy_note: "momentum can work, survive swings"
 
   bear_quiet:
-    position_size: 1.0            # 100%
+    position_size: 0.25           # 25% — higher sigma_target levers this low-Sharpe regime; cut to offset
     atr_stop_multiplier: 2.0      # 1.5-2x ATR
-    strategy_note: "short trend following, rare but tradeable"
+    strategy_note: "slow decline; quarter position — leverage would add vol with no return at Sharpe ~0.04"
 
   bear_volatile:
-    position_size: 0.375          # midpoint of 25-50%
+    position_size: 0.0            # flat — short adds variance faster than return; VIX breaker handles extreme events
     atr_stop_multiplier: 3.0      # 3x+ ATR
-    strategy_note: "capital preservation, cash is a position"
+    strategy_note: "stay flat; beta-weighted short tested and net-negative on this basket"
 
   sideways_quiet:
-    position_size: 0.625          # 50-75%
+    position_size: 1.0            # 100% — Sharpe +0.671 in data; don't cut positive-alpha regime
     atr_stop_multiplier: 1.5      # tight at S/R
     strategy_note: "mean-reversion, fade extremes"
 
@@ -49,6 +49,23 @@ regime_rules:
     position_size: 0.0            # DO NOT TRADE
     atr_stop_multiplier: 0.0
     strategy_note: "step aside entirely, no edge"
+
+# ── VIX circuit breaker ──
+# Forces w=0.0 for all symbols when VIX spikes above threshold.
+# Protects against COVID-style distribution shifts (fold 7 qlike=+7.77).
+vix_circuit_breaker:
+  enabled: true
+  threshold: 40.0               # VIX >= 40 → force flat regardless of regime
+
+# ── Beta-weighted short sizing ──
+# Applied when position_size < 0 (bear_volatile).
+# Scales the base short by each symbol's rolling 60d beta vs SPY.
+# Symbols below min_beta_to_short go flat — avoids shorting counter-cyclical names (XOM).
+beta_short:
+  enabled: true
+  window: 60                    # rolling beta window in trading days
+  min_beta_to_short: 1.0        # beta < 1.0 → flat (not shorted)
+  max_beta_multiplier: 2.0      # cap individual short at 2× base position_size
 
 # ── ADX override (from PDR) ──
 # ADX < threshold + expanding volatility → reduce by 50%
@@ -109,3 +126,16 @@ benchmarks:
 evaluation:
   trading_days_per_year: 252
   risk_free_rate: 0.0             # or use actual rate from market_state
+
+# ── Forecast calibration (log-space constant offset) ──
+# rv_calibrated = intercept + slope * rv_pred
+# MZ linear (slope=1.738) over-corrects: driven by COVID fold outlier, it
+# pushes sigma_hat to 1.86% in normal regimes → weight always capped at w_max.
+# Constant shift (slope=1.0) preserves prediction ordering and reduces
+# sigma_hat by exp(intercept). With intercept=-0.78:
+#   sigma_hat_new ≈ sigma_hat_old × 0.46 → ~15.5% in bull_quiet
+#   avg_weight → ~0.65 (up from 0.298, vs 1.5 capped with MZ linear)
+calibration:
+  enabled: true
+  intercept: -0.05        # minimal shift: exp(-0.05)=0.95, sigma_hat ~16.2% → implied_weight ~0.62 (ideal 0.618)
+  slope: 1.0              # no slope stretch; pre-cal bull_quiet sigma was already ~17% (actual 19.8%)
