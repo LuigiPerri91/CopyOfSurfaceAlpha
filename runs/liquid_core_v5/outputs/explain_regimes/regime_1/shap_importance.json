@@ -1,0 +1,19 @@
+{
+  "days_since_hv_year_high": 0.029908034373198264,
+  "days_since_iv_year_high": 0.028236229280074333,
+  "days_since_hv_year_low": 0.009634040661676887,
+  "days_since_iv_year_low": 0.0070017304523155655,
+  "spy_atr_ratio": 0.00011550460928191147,
+  "vix": 9.601318640905288e-05,
+  "hv_rank": 4.710075464721702e-05,
+  "spy_adx14": 1.0588646715576444e-05,
+  "spy_pct_from_ma200": 7.299785125300892e-06,
+  "iv_momentum_medium": 6.0152921967313425e-06,
+  "hv_momentum_medium": 3.416633271512716e-06,
+  "iv_rank": 3.292459738768784e-06,
+  "iv_momentum_short": 1.8886438820681196e-06,
+  "spy_return": 1.7973525219247742e-06,
+  "hv_momentum_short": 9.851034966545607e-07,
+  "risk_free_rate": 6.802734635092529e-07,
+  "vol_risk_premium": 2.623399681345655e-07
+}

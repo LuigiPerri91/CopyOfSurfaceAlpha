@@ -1,0 +1,10 @@
+{
+  "n_bull_quiet_days": 713,
+  "mean_ratio": 0.9659,
+  "pct_overforecast": 0.4137,
+  "avg_sigma_hat": 0.2111,
+  "avg_actual_sigma": 0.2331,
+  "avg_implied_weight": 0.4991,
+  "avg_ideal_weight": 0.4788,
+  "weight_drag": -0.0203
+}

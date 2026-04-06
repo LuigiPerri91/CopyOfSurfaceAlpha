@@ -1,0 +1,47 @@
+{
+  "ann_return_pct": 8.805,
+  "ann_vol_pct": 16.388,
+  "sharpe": 0.5373,
+  "sortino": 0.6565,
+  "max_drawdown_pct": -27.481,
+  "calmar": 0.3204,
+  "total_return_pct": 68.485,
+  "n_trading_days": 1764,
+  "positive_days_pct": 51.76,
+  "turnover_ann": 17.748,
+  "avg_weight": 0.8666,
+  "weight_std": 0.4774,
+  "vol_target_tracking": 0.5463,
+  "per_regime": {
+    "bull_quiet": {
+      "n": 713,
+      "sharpe": 0.657,
+      "avg_weight": 1.3404
+    },
+    "bull_volatile": {
+      "n": 90,
+      "sharpe": 0.763,
+      "avg_weight": 0.5533
+    },
+    "bear_quiet": {
+      "n": 172,
+      "sharpe": -0.276,
+      "avg_weight": 0.2787
+    },
+    "bear_volatile": {
+      "n": 131,
+      "sharpe": -0.517,
+      "avg_weight": -0.0663
+    },
+    "sideways_quiet": {
+      "n": 640,
+      "sharpe": 0.808,
+      "avg_weight": 0.7561
+    },
+    "sideways_volatile": {
+      "n": 18,
+      "sharpe": -8.821,
+      "avg_weight": 0.0
+    }
+  }
+}

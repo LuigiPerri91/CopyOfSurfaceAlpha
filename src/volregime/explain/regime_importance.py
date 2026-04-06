@@ -10,8 +10,9 @@ vol_history (11 features from data.yaml):
     days_since_iv_year_high, days_since_iv_year_low,
     days_since_hv_year_high, days_since_hv_year_low
 
-market_state (3 features from data.yaml):
-    vix, spy_return, risk_free_rate
+market_state (3–6 features from data.yaml):
+    vix, spy_return, risk_free_rate,
+    spy_pct_from_ma200, spy_adx14, spy_atr_ratio  (V5+)
 
 Two approaches:
 
@@ -47,10 +48,13 @@ DEFAULT_FEATURE_NAMES: list[str] = [
     "days_since_iv_year_low",
     "days_since_hv_year_high",
     "days_since_hv_year_low",
-    # market_state (3)
+    # market_state (3 for V4, 6 for V5)
     "vix",
     "spy_return",
     "risk_free_rate",
+    "spy_pct_from_ma200",
+    "spy_adx14",
+    "spy_atr_ratio",
 ]
 
 REGIME_NAMES: list[str] = [
@@ -118,10 +122,11 @@ def gradient_x_input_regime(
     ret = returns.to(device).float().detach()
 
     # concatenate into a single leaf tensor so we take one gradient
-    context = torch.cat([
+    # NaN features (e.g. iv_rank early in history) → 0 to prevent grad×input = NaN
+    context = torch.nan_to_num(torch.cat([
         vol_history.to(device).float(),
         market_state.to(device).float(),
-    ], dim=-1).detach().requires_grad_(True) # (B, 14)
+    ], dim=-1), nan=0.0).detach().requires_grad_(True) # (B, ctx_dim)
 
     vh = context[:, :VOL_HISTORY_DIM]
     ms = context[:, VOL_HISTORY_DIM:]
@@ -160,12 +165,14 @@ class RegimeImportance:
         model: nn.Module,
         device: torch.device,
         feature_names: list[str] | None = None,
-        vol_history_dim: int = VOL_HISTORY_DIM
+        vol_history_dim: int = VOL_HISTORY_DIM,
+        macro_dim: int | None = None,
     ):
         self.model = model
         self.device = device
         self.feature_names = feature_names or DEFAULT_FEATURE_NAMES
         self.vh_dim = vol_history_dim
+        self.macro_dim = macro_dim
         self.model.eval()
 
     def compute(self, loader) -> RegimeImportanceResult:
@@ -184,15 +191,20 @@ class RegimeImportance:
             ret = batch['returns'].to(self.device).float()
             vh = batch['vol_history'].to(self.device).float()
             ms = batch['market_state'].to(self.device).float()
+            if self.macro_dim is not None:
+                ms = ms[:, :self.macro_dim]
 
             attrs = gradient_x_input_regime(
-                self.model, vh, ms, surf, ret, self.device 
+                self.model, vh, ms, surf, ret, self.device
             ) # (B, 6, 14)
             all_attrs.append(attrs)
 
+            ms_ctx = batch['market_state'].float()
+            if self.macro_dim is not None:
+                ms_ctx = ms_ctx[:, :self.macro_dim]
             ctx = torch.cat([
                 batch['vol_history'].float(),
-                batch['market_state'].float()
+                ms_ctx,
             ], dim = -1).numpy()
             all_context.append(ctx)
 
@@ -209,7 +221,8 @@ class RegimeImportance:
         mean_attr = np.abs(attrs_all).mean(axis=0) # (6,14)
 
         # mean feature values for samples predicted in each regime
-        mean_feat = np.zeros((6, len(self.feature_names)))
+        n_ctx_features = context_all.shape[1]
+        mean_feat = np.zeros((6, n_ctx_features))
         counts = np.zeros(6, dtype=int)
         for k in range(6):
             mask = regimes_all == k
@@ -217,8 +230,9 @@ class RegimeImportance:
             if counts[k] > 0:
                 mean_feat[k] = context_all[mask].mean(axis=0)
 
+        feature_names = DEFAULT_FEATURE_NAMES[:n_ctx_features]
         return RegimeImportanceResult(
-            mean_attr, mean_feat, counts, self.feature_names
+            mean_attr, mean_feat, counts, feature_names
         )
 
     def attribution_for_batch(self, batch: dict) -> np.ndarray:

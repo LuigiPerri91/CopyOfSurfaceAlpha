@@ -6,6 +6,7 @@ from .vit_attribution import (
     SURFACE_CHANNELS,
 )
 from .regime_importance import RegimeImportance, RegimeImportanceResult
+from .gating_analysis import GatingAnalysis, GatingResult
 
 __all__ = [
     "SHAPExplainer",
@@ -17,4 +18,6 @@ __all__ = [
     "SURFACE_CHANNELS",
     "RegimeImportance",
     "RegimeImportanceResult",
+    "GatingAnalysis",
+    "GatingResult",
 ]

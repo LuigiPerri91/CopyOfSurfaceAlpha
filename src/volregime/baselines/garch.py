@@ -52,12 +52,13 @@ class EGARCHBaseline:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             self.result = model.fit(disp='off', show_warning=False)
-    
+
     def predict(self, n_ahead: int | None = None) -> float:
         if self.result is None:
             raise RuntimeError('Call fit() before predict().')
         h = n_ahead or self.horizon
-        forecast = self.result.forecast(horizon=h, reindex=False)
+        method = 'analytic' if h == 1 else 'simulation'
+        forecast = self.result.forecast(horizon=h, method=method, reindex=False)
         # return sqrt of h-step-ahead variance sum
         variance = forecast.variance.iloc[-1].values[:h]
         return float(np.sqrt(variance.sum()) / 100)

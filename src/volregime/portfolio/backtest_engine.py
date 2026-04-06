@@ -198,11 +198,13 @@ class BacktestEngine:
                 regime_probs /= regime_probs.sum()
 
                 macro_regime = signals['regime_name'] if signals else None
+                tail_prob = float(pred_row['tail_prob']) if 'tail_prob' in pred_row.index else None
                 overlay_out = self.overlay.compute(
                     log_rv_pred=self._calibrate_rv(float(pred_row['rv_pred'])),
                     regime_probs=regime_probs,
                     signals=signals,
                     macro_regime_name=macro_regime,
+                    tail_prob=tail_prob,
                 )
                 w_target = overlay_out['weight']
 

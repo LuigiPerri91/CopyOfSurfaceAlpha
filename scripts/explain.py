@@ -38,6 +38,7 @@ from volregime.utils.config import get_project_root, load_config
 from volregime.utils.io import load_checkpoint
 from volregime.explain import (
     DEFAULT_FEATURE_NAMES,
+    GatingAnalysis,
     RegimeImportance,
     SHAPExplainer,
     attention_rollout,
@@ -79,6 +80,8 @@ def parse_args():
     p.add_argument("--explain-output", type=str, default=None,
                    help="Output directory for explain results "
                         "(default: <project_root>/outputs/explain)")
+    p.add_argument("--macro-dim", type=int, default=None,
+                   help="Override model.context_encoder.macro_dim (use 3 for V4 checkpoints)")
     return p.parse_args()
 
 def _collect_tensors(loader, key: str, n: int) -> torch.Tensor:
@@ -94,13 +97,19 @@ def _collect_tensors(loader, key: str, n: int) -> torch.Tensor:
     return torch.cat(parts, dim=0)[:n]
 
 
-def _collect_context(loader, n: int) -> np.ndarray:
-    """Collect [vol_history | market_state] as (N, 14) numpy array."""
+def _collect_context(loader, n: int, market_state_dim: int | None = None) -> np.ndarray:
+    """Collect [vol_history | market_state] as (N, vh_dim+ms_dim) numpy array.
+
+    market_state_dim: if set, truncates market_state to first N features.
+    Use when running explain on an older checkpoint trained with fewer macro features.
+    """
     parts = []
     total = 0
     for batch in loader:
         vh  = batch["vol_history"].float()
         ms  = batch["market_state"].float()
+        if market_state_dim is not None:
+            ms = ms[:, :market_state_dim]
         ctx = torch.cat([vh, ms], dim=-1).numpy()
         parts.append(ctx)
         total += ctx.shape[0]
@@ -139,6 +148,8 @@ def main():
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
 
     # model
+    if args.macro_dim is not None:
+        cfg['model']['context_encoder']['macro_dim'] = args.macro_dim
     model = SurfaceAlphaModel(cfg).to(device)
     model.eval()
 
@@ -154,12 +165,12 @@ def main():
 
     # baselines (mean of background set)
     log.info('Collecting background tensors...')
-    background_ctx = _collect_context(bg_loader, args.n_background)
+    background_ctx = _collect_context(bg_loader, args.n_background, market_state_dim=args.macro_dim)
     surf_baseline = _collect_tensors(bg_loader, 'surface', args.n_background).mean(0, keepdim=True).to(device)
     ret_baseline = _collect_tensors(bg_loader, "returns", args.n_background).mean(0, keepdim=True).to(device)
 
     log.info("Collecting test context...")
-    test_ctx = _collect_context(test_loader, args.n_explain)
+    test_ctx = _collect_context(test_loader, args.n_explain, market_state_dim=args.macro_dim)
 
     # SHAP
     log.info("Running SHAP GradientExplainer (output=%s)...", args.output)
@@ -190,6 +201,8 @@ def main():
     ret = batch["returns"].to(device).float()
     vh = batch["vol_history"].to(device).float()
     ms = batch["market_state"].to(device).float()
+    if args.macro_dim is not None:
+        ms = ms[:, :args.macro_dim]
 
     if args.method == "gradient":
         attr = gradient_saliency(model, surf, ret, vh, ms, output=args.output)
@@ -203,7 +216,7 @@ def main():
 
     # Regime importance
     log.info("Running regime importance over test set...")
-    ri = RegimeImportance(model=model, device=device, feature_names=DEFAULT_FEATURE_NAMES)
+    ri = RegimeImportance(model=model, device=device, feature_names=DEFAULT_FEATURE_NAMES, macro_dim=args.macro_dim)
     ri_result = ri.compute(test_loader)
 
     np.save(out_dir / "regime_attribution.npy", ri_result.mean_attribution)
@@ -220,6 +233,36 @@ def main():
         log.info("  %-22s (%4d samples): %s", regime, count, ", ".join(feats))
 
     log.info("All outputs saved -> %s/", out_dir)
+
+    # MoE gating analysis — Spearman correlation between expert weights and context features
+    log.info("Running MoE gating analysis...")
+    ga = GatingAnalysis(model=model, device=device, macro_dim=args.macro_dim)
+    ga_result = ga.compute(test_loader)
+
+    with open(out_dir / "gating_correlations.json", "w") as f:
+        json.dump(ga_result.correlations, f, indent=2)
+
+    rows = []
+    for regime in ga_result.feature_names and ga_result.correlations:
+        active = ga_result.feature_means_active[regime]
+        inactive = ga_result.feature_means_inactive[regime]
+        for feat in ga_result.feature_names:
+            rows.append({
+                "regime": regime,
+                "feature": feat,
+                "mean_active": active[feat],
+                "mean_inactive": inactive[feat],
+                "diff": round(active[feat] - inactive[feat], 4) if not (
+                    isinstance(active[feat], float) and isinstance(inactive[feat], float)
+                    and (active[feat] != active[feat] or inactive[feat] != inactive[feat])
+                ) else float("nan"),
+            })
+    pd.DataFrame(rows).to_csv(out_dir / "gating_feature_means.csv", index=False)
+
+    log.info("MoE gating — top Spearman correlation per expert:")
+    for regime, corrs in ga_result.correlations.items():
+        top_feat, top_r = next(iter(corrs.items()))
+        log.info("  %-22s top: %s = %.3f", regime, top_feat, top_r)
 
 if __name__ == "__main__":
     main()
