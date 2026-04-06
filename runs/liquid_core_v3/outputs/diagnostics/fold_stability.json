@@ -1,0 +1,92 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "train_start": "2015-01-02",
+      "train_end": "2018-01-02",
+      "test_start": "2018-04-12",
+      "test_end": "2018-07-11",
+      "test_year": "2018",
+      "vol_qlike": -5.1729,
+      "vol_r2": -0.349,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 1,
+      "train_start": "2015-01-02",
+      "train_end": "2018-04-04",
+      "test_start": "2018-07-12",
+      "test_end": "2018-10-09",
+      "test_year": "2018",
+      "vol_qlike": -4.6986,
+      "vol_r2": -0.0942,
+      "tail_auc": 0.5554
+    },
+    {
+      "fold": 2,
+      "train_start": "2015-01-02",
+      "train_end": "2018-07-03",
+      "test_start": "2018-10-10",
+      "test_end": "2019-01-11",
+      "test_year": "2018",
+      "vol_qlike": -3.4756,
+      "vol_r2": -0.9629,
+      "tail_auc": 0.5487
+    },
+    {
+      "fold": 3,
+      "train_start": "2015-01-02",
+      "train_end": "2018-10-02",
+      "test_start": "2019-01-14",
+      "test_end": "2019-04-12",
+      "test_year": "2019",
+      "vol_qlike": -5.148,
+      "vol_r2": 0.1417,
+      "tail_auc": 0.9121
+    },
+    {
+      "fold": 4,
+      "train_start": "2015-01-02",
+      "train_end": "2019-01-04",
+      "test_start": "2019-04-15",
+      "test_end": "2019-07-15",
+      "test_year": "2019",
+      "vol_qlike": -4.8335,
+      "vol_r2": -0.7506,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 5,
+      "train_start": "2015-01-02",
+      "train_end": "2019-04-05",
+      "test_start": "2019-07-16",
+      "test_end": "2019-10-14",
+      "test_year": "2019",
+      "vol_qlike": -4.4351,
+      "vol_r2": -0.4877,
+      "tail_auc": 0.4151
+    },
+    {
+      "fold": 6,
+      "train_start": "2015-01-02",
+      "train_end": "2019-07-08",
+      "test_start": "2019-10-15",
+      "test_end": "2020-01-14",
+      "test_year": "2019",
+      "vol_qlike": -5.3622,
+      "vol_r2": -0.0955,
+      "tail_auc": 0.8937
+    },
+    {
+      "fold": 7,
+      "train_start": "2015-01-02",
+      "train_end": "2019-10-07",
+      "test_start": "2020-01-15",
+      "test_end": "2020-04-15",
+      "test_year": "2020",
+      "vol_qlike": 5.3029,
+      "vol_r2": -1.4109,
+      "tail_auc": 0.784
+    }
+  ]
+}

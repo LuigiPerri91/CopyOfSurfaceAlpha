@@ -1,0 +1,27 @@
+{
+  "buy_and_hold": {
+    "ann_return_pct": -6.19,
+    "ann_vol_pct": 27.866,
+    "sharpe": -0.2221,
+    "sortino": -0.2405,
+    "max_drawdown_pct": -40.659,
+    "calmar": -0.1522,
+    "total_return_pct": -18.35,
+    "n_trading_days": 504,
+    "positive_days_pct": 51.59
+  },
+  "inverse_vol": {
+    "ann_return_pct": -2.635,
+    "ann_vol_pct": 11.665,
+    "sharpe": -0.2259,
+    "sortino": -0.2767,
+    "max_drawdown_pct": -16.723,
+    "calmar": -0.1576,
+    "total_return_pct": -6.423,
+    "n_trading_days": 504,
+    "positive_days_pct": 51.59,
+    "turnover_ann": 6.778,
+    "avg_weight": 0.731,
+    "weight_std": 0.2955
+  }
+}

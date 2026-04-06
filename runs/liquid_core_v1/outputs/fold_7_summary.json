@@ -1,0 +1,10 @@
+{
+  "fold_idx": 7,
+  "train_start": "2015-01-02",
+  "train_end": "2019-10-07",
+  "test_start": "2020-01-15",
+  "test_end": "2020-04-15",
+  "best_val_loss": 0.14163973129221372,
+  "n_test_samples": 441,
+  "predictions_path": "runs/liquid_core/outputs/predictions/fold_7_test_preds.parquet"
+}

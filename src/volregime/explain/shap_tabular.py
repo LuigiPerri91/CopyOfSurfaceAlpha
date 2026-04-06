@@ -43,14 +43,17 @@ DEFAULT_FEATURE_NAMES: list[str] = [
     "days_since_iv_year_low",
     "days_since_hv_year_high",
     "days_since_hv_year_low",
-    # market_state (3)
+    # market_state (3 for V4, 6 for V5)
     "vix",
     "spy_return",
     "risk_free_rate",
+    "spy_pct_from_ma200",
+    "spy_adx14",
+    "spy_atr_ratio",
 ]
 
 VOL_HISTORY_DIM = 11
-MARKET_STATE_DIM = 3
+MARKET_STATE_DIM = 3  # V4 default; V5 uses 6
 
 @dataclass
 class ShapResult:
@@ -175,11 +178,13 @@ class SHAPExplainer:
             bg = torch.tensor(self._background, dtype=torch.float32, device=self.device)
             base_val = float(self.wrapper(bg).mean().item())
 
+        n_features = shap_arr.shape[1]
+        feature_names = DEFAULT_FEATURE_NAMES[:n_features]
         return ShapResult(
             shap_values= shap_arr,
             base_values= np.full(len(context), base_val),
             data = context,
-            feature_names= self.feature_names,
+            feature_names= feature_names,
             output_name = self.output
         )
 

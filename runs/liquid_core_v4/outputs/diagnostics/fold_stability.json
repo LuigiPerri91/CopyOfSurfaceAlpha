@@ -1,0 +1,312 @@
+{
+  "folds": [
+    {
+      "fold": 0,
+      "train_start": "2015-01-02",
+      "train_end": "2018-01-02",
+      "test_start": "2018-04-12",
+      "test_end": "2018-07-11",
+      "test_year": "2018",
+      "vol_qlike": -5.2642,
+      "vol_r2": 0.1953,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 10,
+      "train_start": "2015-01-02",
+      "train_end": "2020-07-09",
+      "test_start": "2020-10-15",
+      "test_end": "2021-01-14",
+      "test_year": "2020",
+      "vol_qlike": -2.9329,
+      "vol_r2": -0.2528,
+      "tail_auc": 0.4449
+    },
+    {
+      "fold": 11,
+      "train_start": "2015-01-02",
+      "train_end": "2020-10-07",
+      "test_start": "2021-01-15",
+      "test_end": "2021-04-16",
+      "test_year": "2021",
+      "vol_qlike": -3.7833,
+      "vol_r2": 0.1989,
+      "tail_auc": 0.7713
+    },
+    {
+      "fold": 12,
+      "train_start": "2015-01-02",
+      "train_end": "2021-01-07",
+      "test_start": "2021-04-19",
+      "test_end": "2021-07-16",
+      "test_year": "2021",
+      "vol_qlike": -4.5933,
+      "vol_r2": -0.2115,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 13,
+      "train_start": "2015-01-02",
+      "train_end": "2021-04-09",
+      "test_start": "2021-07-19",
+      "test_end": "2021-10-14",
+      "test_year": "2021",
+      "vol_qlike": -4.621,
+      "vol_r2": 0.3752,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 14,
+      "train_start": "2015-01-02",
+      "train_end": "2021-07-09",
+      "test_start": "2021-10-15",
+      "test_end": "2022-01-13",
+      "test_year": "2021",
+      "vol_qlike": -3.5688,
+      "vol_r2": 0.1877,
+      "tail_auc": 0.6005
+    },
+    {
+      "fold": 15,
+      "train_start": "2015-01-02",
+      "train_end": "2021-10-07",
+      "test_start": "2022-01-14",
+      "test_end": "2022-04-14",
+      "test_year": "2022",
+      "vol_qlike": -3.3485,
+      "vol_r2": -0.2034,
+      "tail_auc": 0.4801
+    },
+    {
+      "fold": 16,
+      "train_start": "2015-01-02",
+      "train_end": "2022-01-06",
+      "test_start": "2022-04-18",
+      "test_end": "2022-07-18",
+      "test_year": "2022",
+      "vol_qlike": -3.3635,
+      "vol_r2": 0.5736,
+      "tail_auc": 0.3809
+    },
+    {
+      "fold": 17,
+      "train_start": "2015-01-02",
+      "train_end": "2022-04-07",
+      "test_start": "2022-07-19",
+      "test_end": "2022-10-14",
+      "test_year": "2022",
+      "vol_qlike": -3.3469,
+      "vol_r2": -0.0653,
+      "tail_auc": 0.4796
+    },
+    {
+      "fold": 18,
+      "train_start": "2015-01-02",
+      "train_end": "2022-07-11",
+      "test_start": "2022-10-17",
+      "test_end": "2023-01-17",
+      "test_year": "2022",
+      "vol_qlike": -3.5498,
+      "vol_r2": 0.4768,
+      "tail_auc": 0.7003
+    },
+    {
+      "fold": 19,
+      "train_start": "2015-01-02",
+      "train_end": "2022-10-07",
+      "test_start": "2023-01-18",
+      "test_end": "2023-04-18",
+      "test_year": "2023",
+      "vol_qlike": -3.8219,
+      "vol_r2": 0.5942,
+      "tail_auc": 0.323
+    },
+    {
+      "fold": 1,
+      "train_start": "2015-01-02",
+      "train_end": "2018-04-04",
+      "test_start": "2018-07-12",
+      "test_end": "2018-10-09",
+      "test_year": "2018",
+      "vol_qlike": -4.6581,
+      "vol_r2": -0.0844,
+      "tail_auc": 0.4036
+    },
+    {
+      "fold": 20,
+      "train_start": "2015-01-02",
+      "train_end": "2023-01-09",
+      "test_start": "2023-04-19",
+      "test_end": "2023-07-19",
+      "test_year": "2023",
+      "vol_qlike": -4.4331,
+      "vol_r2": 0.7412,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 21,
+      "train_start": "2015-01-02",
+      "train_end": "2023-04-11",
+      "test_start": "2023-07-20",
+      "test_end": "2023-10-17",
+      "test_year": "2023",
+      "vol_qlike": -4.2865,
+      "vol_r2": 0.4134,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 22,
+      "train_start": "2015-01-02",
+      "train_end": "2023-07-12",
+      "test_start": "2023-10-18",
+      "test_end": "2024-01-18",
+      "test_year": "2023",
+      "vol_qlike": -4.5574,
+      "vol_r2": 0.5599,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 23,
+      "train_start": "2015-01-02",
+      "train_end": "2023-10-10",
+      "test_start": "2024-01-19",
+      "test_end": "2024-04-18",
+      "test_year": "2024",
+      "vol_qlike": -4.3302,
+      "vol_r2": 0.6257,
+      "tail_auc": 0.7198
+    },
+    {
+      "fold": 24,
+      "train_start": "2015-01-02",
+      "train_end": "2024-01-10",
+      "test_start": "2024-04-19",
+      "test_end": "2024-07-19",
+      "test_year": "2024",
+      "vol_qlike": -4.1349,
+      "vol_r2": 0.5524,
+      "tail_auc": 0.3486
+    },
+    {
+      "fold": 25,
+      "train_start": "2015-01-02",
+      "train_end": "2024-04-11",
+      "test_start": "2024-07-22",
+      "test_end": "2024-10-17",
+      "test_year": "2024",
+      "vol_qlike": -3.9842,
+      "vol_r2": 0.6305,
+      "tail_auc": 0.4723
+    },
+    {
+      "fold": 26,
+      "train_start": "2015-01-02",
+      "train_end": "2024-07-12",
+      "test_start": "2024-10-18",
+      "test_end": "2025-01-21",
+      "test_year": "2024",
+      "vol_qlike": -3.7939,
+      "vol_r2": 0.416,
+      "tail_auc": 0.7795
+    },
+    {
+      "fold": 27,
+      "train_start": "2015-01-02",
+      "train_end": "2024-10-10",
+      "test_start": "2025-01-22",
+      "test_end": "2025-04-22",
+      "test_year": "2025",
+      "vol_qlike": -2.0116,
+      "vol_r2": -0.1434,
+      "tail_auc": 0.5057
+    },
+    {
+      "fold": 2,
+      "train_start": "2015-01-02",
+      "train_end": "2018-07-03",
+      "test_start": "2018-10-10",
+      "test_end": "2019-01-11",
+      "test_year": "2018",
+      "vol_qlike": -3.3799,
+      "vol_r2": -0.9252,
+      "tail_auc": 0.4981
+    },
+    {
+      "fold": 3,
+      "train_start": "2015-01-02",
+      "train_end": "2018-10-02",
+      "test_start": "2019-01-14",
+      "test_end": "2019-04-12",
+      "test_year": "2019",
+      "vol_qlike": -5.1281,
+      "vol_r2": -0.0026,
+      "tail_auc": 0.9852
+    },
+    {
+      "fold": 4,
+      "train_start": "2015-01-02",
+      "train_end": "2019-01-04",
+      "test_start": "2019-04-15",
+      "test_end": "2019-07-15",
+      "test_year": "2019",
+      "vol_qlike": -4.8695,
+      "vol_r2": -0.4254,
+      "tail_auc": NaN
+    },
+    {
+      "fold": 5,
+      "train_start": "2015-01-02",
+      "train_end": "2019-04-05",
+      "test_start": "2019-07-16",
+      "test_end": "2019-10-14",
+      "test_year": "2019",
+      "vol_qlike": -4.2572,
+      "vol_r2": -1.1121,
+      "tail_auc": 0.3015
+    },
+    {
+      "fold": 6,
+      "train_start": "2015-01-02",
+      "train_end": "2019-07-08",
+      "test_start": "2019-10-15",
+      "test_end": "2020-01-14",
+      "test_year": "2019",
+      "vol_qlike": -5.4314,
+      "vol_r2": 0.2209,
+      "tail_auc": 0.5112
+    },
+    {
+      "fold": 7,
+      "train_start": "2015-01-02",
+      "train_end": "2019-10-07",
+      "test_start": "2020-01-15",
+      "test_end": "2020-04-15",
+      "test_year": "2020",
+      "vol_qlike": 7.7718,
+      "vol_r2": -1.8797,
+      "tail_auc": 0.5154
+    },
+    {
+      "fold": 8,
+      "train_start": "2015-01-02",
+      "train_end": "2020-01-07",
+      "test_start": "2020-04-16",
+      "test_end": "2020-07-16",
+      "test_year": "2020",
+      "vol_qlike": -3.4862,
+      "vol_r2": 0.2589,
+      "tail_auc": 0.479
+    },
+    {
+      "fold": 9,
+      "train_start": "2015-01-02",
+      "train_end": "2020-04-07",
+      "test_start": "2020-07-17",
+      "test_end": "2020-10-14",
+      "test_year": "2020",
+      "vol_qlike": -3.6252,
+      "vol_r2": 0.0082,
+      "tail_auc": 0.5907
+    }
+  ]
+}

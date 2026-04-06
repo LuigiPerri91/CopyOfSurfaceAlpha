@@ -1,0 +1,44 @@
+{
+  "bull_quiet": [
+    "days_since_iv_year_low",
+    "days_since_hv_year_high",
+    "days_since_iv_year_high",
+    "days_since_hv_year_low",
+    "spy_atr_ratio"
+  ],
+  "bull_volatile": [
+    "days_since_iv_year_low",
+    "days_since_hv_year_high",
+    "days_since_iv_year_high",
+    "days_since_hv_year_low",
+    "spy_atr_ratio"
+  ],
+  "bear_quiet": [
+    "days_since_iv_year_low",
+    "days_since_hv_year_high",
+    "days_since_iv_year_high",
+    "days_since_hv_year_low",
+    "spy_atr_ratio"
+  ],
+  "bear_volatile": [
+    "days_since_iv_year_low",
+    "days_since_hv_year_high",
+    "days_since_iv_year_high",
+    "days_since_hv_year_low",
+    "spy_atr_ratio"
+  ],
+  "sideways_quiet": [
+    "days_since_iv_year_low",
+    "days_since_hv_year_high",
+    "days_since_iv_year_high",
+    "days_since_hv_year_low",
+    "spy_atr_ratio"
+  ],
+  "sideways_volatile": [
+    "days_since_iv_year_low",
+    "days_since_hv_year_high",
+    "days_since_iv_year_high",
+    "days_since_hv_year_low",
+    "spy_atr_ratio"
+  ]
+}
