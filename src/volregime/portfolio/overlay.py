@@ -8,8 +8,13 @@ Strategy logic (per backtest.yaml / PDR):
                        p_crisis = P(bear_volatile) + P(sideways_volatile)
     4. ADX override:   if ADX < 20 (no trend): w = w * (1 - size_reduction)
     5. Confidence:     w = w / (1 + ensemble_std)   [Phase 7, disabled by default]
-    6. Clip:           w = clip(w, w_min, w_max)
+    6. Clip:           w = clip(w, w_min, w_max)   [w_min can be negative for shorts]
     7. VIX breaker:    if VIX >= threshold → w = 0.0  (circuit breaker, applied last)
+
+Short path (regime_size < 0, i.e. bear_volatile):
+    Steps 1-2 replaced by: w = regime_size IF P(bear_volatile) >= short_overlay.model_prob_gate,
+                            else w = 0.0 (flat — rule fires but model disagrees).
+    Steps 3-7 still apply (ADX override reduces short, VIX breaker exits it).
 
 Config keys (cfg["backtest"]):
     vol_targeting.sigma_target / w_max / w_min
@@ -53,6 +58,15 @@ class PortfolioOverlay:
         self.vix_cb_enabled = bool(vix_cb.get('enabled', False))
         self.vix_cb_threshold = float(vix_cb.get('threshold', 40.0))
 
+        short_cfg = bt_cfg.get('short_overlay', {})
+        self.short_prob_gate = float(short_cfg.get('model_prob_gate', 0.40))
+        self.short_use_model_argmax = bool(short_cfg.get('use_model_argmax', False))
+
+        tail_cfg = bt_cfg.get('tail_hedge', {})
+        self.tail_hedge_enabled = bool(tail_cfg.get('enabled', False))
+        self.tail_hedge_threshold = float(tail_cfg.get('threshold', 0.5))
+        self.tail_hedge_max_short = float(tail_cfg.get('max_short', -0.30))
+
     def compute(
         self,
         log_rv_pred: float,
@@ -60,6 +74,7 @@ class PortfolioOverlay:
         signals: dict | None = None,
         ensemble_std: float | None = None,
         macro_regime_name: str | None = None,
+        tail_prob: float | None = None,
     ) -> dict:
         """
         Compute the target position size for a single date.
@@ -91,8 +106,13 @@ class PortfolioOverlay:
             # Vol targeting is wrong-direction for shorts — high vol produces a tiny
             # vol-target weight which when multiplied by a negative size gives a tiny
             # short, but high-vol bear is exactly when you want maximum short exposure.
-            # Use the fixed short size from regime_rules directly.
-            w = float(regime_size)
+            if self.short_use_model_argmax:
+                # Short when model's top prediction is bear_volatile (idx=3)
+                should_short = int(np.argmax(regime_probs)) == 3
+            else:
+                # Short when model's bear_volatile probability clears gate
+                should_short = float(regime_probs[3]) >= self.short_prob_gate
+            w = float(regime_size) if should_short else 0.0
         else:
             # Long regime: vol targeting then regime sizing
             w = self.sigma_target / sigma_hat
@@ -105,6 +125,18 @@ class PortfolioOverlay:
             p_crisis = float(regime_probs[3] + regime_probs[5])
             p_crisis = np.clip(p_crisis, 0.0, 1.0)
             w *= (1.0 - p_crisis)
+
+        # tail-prob hedge: override with continuous short when model signals high tail risk
+        # w_hedge = max_short * (tail_prob - threshold) / (1 - threshold), capped at max_short
+        # Applied after regime sizing; takes more negative of regime w vs hedge w.
+        tail_hedge_applied = False
+        if self.tail_hedge_enabled and tail_prob is not None:
+            tp = float(tail_prob)
+            if tp > self.tail_hedge_threshold:
+                excess = (tp - self.tail_hedge_threshold) / max(1.0 - self.tail_hedge_threshold, 1e-6)
+                w_hedge = self.tail_hedge_max_short * excess
+                w = min(w, w_hedge)  # take the more negative (aggressive) of the two
+                tail_hedge_applied = True
 
         # ADX override
         adx_override_applied = False
@@ -140,6 +172,7 @@ class PortfolioOverlay:
             "adx_override": adx_override_applied,
             "confidence_scaling": conf_applied,
             "vix_breaker": vix_breaker_fired,
+            "tail_hedge": tail_hedge_applied,
         }
 
     def compute_batch(

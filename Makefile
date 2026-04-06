@@ -182,6 +182,13 @@ explain-regimes-v5:  ## Run SHAP for all 6 regime outputs on V5
 			--explain-output $(LIQUID_OUT_V5)/outputs/explain_regimes/regime_$$regime; \
 	done
 
+.PHONY: compare-shorts-v5
+compare-shorts-v5:  ## Compare all short overlay strategies on V5 predictions
+	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) \
+	$(PYTHON) $(SCRIPTS)/compare_short_strategies.py \
+		--predictions-dir $(LIQUID_OUT_V5)/outputs/predictions \
+		--output $(LIQUID_OUT_V5)/outputs/short_comparison
+
 .PHONY: diagnose-liquid
 diagnose-liquid:  ## Run diagnostics: MoE diversity, bull_quiet, fold stability
 	ACTIVE_SYMBOLS=liquid_core DATA_DIR=$(LIQUID_DATA) \

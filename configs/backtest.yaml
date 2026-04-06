@@ -8,7 +8,7 @@
 vol_targeting:
   sigma_target: 0.30              # annualized target vol (30%) — allows leverage in quiet regimes (bull_quiet sigma_hat ~21% → w ~1.42)
   w_max: 1.5                     # max weight (150% leverage cap)
-  w_min: 0.0                      # min weight — no shorts; VIX breaker handles crisis protection
+  w_min: -0.5                     # min weight — allows short up to 50%; beta-weighted per symbol
 
 # ── Regime gating ──
 # w_t = w_t * (1 - p_crisis)
@@ -36,9 +36,9 @@ regime_rules:
     strategy_note: "slow decline; quarter position — leverage would add vol with no return at Sharpe ~0.04"
 
   bear_volatile:
-    position_size: 0.0            # flat — short adds variance faster than return; VIX breaker handles extreme events
+    position_size: -0.20          # 20% short base; scaled by beta in backtest_engine (beta=1.5 → -0.30); VIX breaker exits at VIX>=40
     atr_stop_multiplier: 3.0      # 3x+ ATR
-    strategy_note: "stay flat; beta-weighted short tested and net-negative on this basket"
+    strategy_note: "short equity; beta-weighted per symbol; model prob gate must be ≥0.40"
 
   sideways_quiet:
     position_size: 1.0            # 100% — Sharpe +0.671 in data; don't cut positive-alpha regime
@@ -56,6 +56,24 @@ regime_rules:
 vix_circuit_breaker:
   enabled: true
   threshold: 40.0               # VIX >= 40 → force flat regardless of regime
+
+# ── Short overlay gate ──
+# When position_size < 0 (bear_volatile), the model's bear_volatile probability
+# must exceed this threshold for the short to fire. Otherwise goes flat.
+# Prevents rule-based regime misfires from triggering uninconfident shorts.
+short_overlay:
+  model_prob_gate: 0.40           # require P(bear_volatile) >= 0.40 from model
+  use_model_argmax: true          # short when model argmax == bear_volatile (ignores gate)
+
+# ── Tail-probability hedge ──
+# Continuous short overlay driven by the model's tail_prob output.
+# When tail_prob > threshold, adds short proportional to the excess probability.
+# w_hedge = max_short * (tail_prob - threshold) / (1 - threshold)
+# The more negative of w_hedge and regime w is taken (both can be active).
+tail_hedge:
+  enabled: false                  # toggle independently from bear_volatile short
+  threshold: 0.50                 # tail_prob must exceed this to trigger hedge
+  max_short: -0.30                # max short at tail_prob=1.0
 
 # ── Beta-weighted short sizing ──
 # Applied when position_size < 0 (bear_volatile).
